@@ -1,26 +1,27 @@
 ---
-name: explore-codebase-1
-description: Searches for and understands functionality across a codebase using a two-phase discovery-then-inspection approach.
+name: search-strategy
+description: Systematically discovers and inspects functionality across a codebase using a two-phase search strategy.
 metadata:
   author: engram
   version: "1.0"
-  generatedAt: 2026-02-02T18:15:26.309Z
+  generatedAt: 2026-02-02T18:15:26.270Z
   sourcePatternId: ca9a7667-8d0a-4d52-ac4f-99436220c3d3
   sourceSynthesisId: 86f883ac-6655-4af1-9996-9562e3306936
 ---
 
-# Explore Codebase 1
+# Search Strategy
 
 ## Overview
 
-Start with broad discovery searches using keywords, file patterns, and export statements to locate relevant files containing the target functionality. Once you've identified the primary files, transition to narrow inspection by reading specific files, searching for precise types or function signatures, and examining implementation details with targeted queries. This progressive narrowing prevents information overload while ensuring thorough understanding.
+Start with broad discovery techniques (keyword searches, file pattern matching, export analysis) to locate files containing the target functionality. Once you've identified the primary files, transition to focused inspection using targeted queries (specific type definitions, line-limited reads, precise file paths) to understand implementation details. This progressive narrowing ensures efficient navigation from "where is this?" to "how does this work?"
 
 ## When to Use
 
-- When a user asks 'how does X work?' or 'where is X implemented?' requiring you to find and explain functionality
-- When you need to understand an unfamiliar API or feature before making changes
-- When investigating bugs or behavior that could be implemented in multiple locations
-- When documenting or refactoring code and you need to trace how a feature is implemented across files
+- Exploring unfamiliar codebases to understand how specific features are implemented
+- Locating APIs or functions when you don't know their exact names or locations
+- Tracing functionality from high-level features down to implementation details
+- Understanding how a system works by first finding entry points, then drilling into specifics
+- Answering questions like 'how does authentication work here?' or 'where is the database logic?'
 
 ## Steps
 

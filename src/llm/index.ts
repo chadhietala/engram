@@ -54,9 +54,15 @@ const UserGoalSchema = z.object({
   category: z.enum(['exploration', 'implementation', 'debugging', 'refactoring', 'testing', 'documentation', 'deployment', 'other']).describe('The category of the goal'),
 });
 
+const IntelligencePointSchema = z.object({
+  purpose: z.string().describe('What this intelligence point does (e.g., "generates commit message")'),
+  location: z.string().describe('Where in the workflow (e.g., "after gathering git diff")'),
+});
+
 const SkillScriptSchema = z.object({
   script: z.string().describe('A complete, executable Bun/TypeScript script that implements the skill workflow'),
   explanation: z.string().describe('Brief explanation of what the script does and how to use it'),
+  intelligencePoints: z.array(IntelligencePointSchema).optional().describe('List of intelligence points where LLM reasoning is used (empty if fully deterministic)'),
 });
 
 // Export inferred types
@@ -466,6 +472,57 @@ for (const entry of entryPoints) {
 }
 \`\`\`
 
+## Intelligence Points (Hybrid Scripts)
+
+Your script can use the \`intelligence()\` function to inject LLM reasoning where deterministic code isn't enough:
+
+\`\`\`typescript
+import { intelligence, intelligenceWithSchema, decide, z } from 'engram/skill-runtime';
+
+// Simple text response - for generating human-readable output
+const summary = await intelligence("Summarize these findings", { data: JSON.stringify(results) });
+
+// Structured response - for typed data
+const ReviewSchema = z.object({
+  issues: z.array(z.string()),
+  approved: z.boolean(),
+});
+const review = await intelligenceWithSchema("Review this code", ReviewSchema, { code });
+
+// Yes/no decision
+const shouldInclude = await decide("Should we include test files?", { context: fileList });
+\`\`\`
+
+**When to use intelligence points:**
+- Generating human-readable text (commit messages, summaries, explanations)
+- Making judgment calls (is this code safe? should we include this file?)
+- Synthesizing information from multiple sources
+- Naming things (variables, files, branches)
+- Code review or analysis that requires reasoning
+
+**When NOT to use intelligence points (use deterministic code):**
+- File discovery and reading
+- Running shell commands
+- Parsing structured data (JSON, YAML)
+- Mathematical operations
+- String manipulation with known patterns
+
+Example of a GOOD hybrid script:
+\`\`\`typescript
+// Deterministic: gather data
+const diff = await $\`git diff --cached\`.text();
+const status = await $\`git status --porcelain\`.text();
+
+// Intelligence point: generate commit message (requires judgment)
+const message = await intelligence(
+  "Generate a concise git commit message following conventional commits format",
+  { diff, status }
+);
+
+// Deterministic: execute with the generated message
+await $\`git commit -m \${message}\`;
+\`\`\`
+
 Requirements:
 - Use Bun APIs: Bun.file(), Bun.Glob, Bun.$\`cmd\`
 - Accept target directory as first argument (default to cwd)
@@ -473,6 +530,7 @@ Requirements:
 - Use parseArgs from "util" for argument parsing
 - Have proper error handling
 - Make the output visually clear with emoji/formatting
+- Use intelligence points ONLY where LLM reasoning adds value (not for mechanical tasks)
 
 Start with: #!/usr/bin/env bun`;
 

@@ -1,27 +1,26 @@
 ---
-name: explore-complex
-description: Explores complex cognitive or meta-cognitive system architectures through comprehensive file reading before beginning active development.
+name: analyze-complex
+description: Deep architectural exploration skill that systematically reads and analyzes complex cognitive or meta-cognitive system implementations before development work.
 metadata:
   author: engram
   version: "1.0"
-  generatedAt: 2026-02-02T18:15:37.774Z
+  generatedAt: 2026-02-02T18:15:37.329Z
   sourcePatternId: 477c9c94-e6e4-4a67-9316-92ec0b157bde
   sourceSynthesisId: ad682084-0062-44ed-816d-2c94d6639034
 ---
 
-# Explore Complex
+# Analyze Complex
 
 ## Overview
 
-When encountering unfamiliar cognitive systems, reasoning frameworks, or abstract architectural patterns, use this skill to first conduct a thorough exploration phase by reading core files that define theoretical patterns, abstractions, and system design. After internalizing the underlying principles through this comprehensive review, transition to active development where you can operationalize, extend, or improve upon these patterns with concrete implementations.
+Use this skill when encountering unfamiliar or complex system architectures that require deep understanding before modification. The skill performs comprehensive file reading across theoretical components, processing layers, and implementation patterns to build a mental model of how the system operates. Once the architecture is internalized, transition to active development with confidence in how new changes will integrate with existing abstractions.
 
 ## When to Use
 
-- Working with AI reasoning systems, memory architectures, or cognitive frameworks where understanding the theoretical foundation is critical before making changes
-- Encountering unfamiliar meta-cognitive systems or abstract architectural patterns that require deep comprehension before implementation
-- Tasked with extending or improving complex reasoning systems where understanding existing design philosophy prevents architectural mismatches
-- Developing features for systems with interconnected theoretical components (like dialectic reasoning, memory processing, or semantic understanding) where changes in one area affect others
-- Beginning work on codebases that implement novel or academic concepts where the abstraction layer is as important as the implementation
+- Working with unfamiliar codebases that have complex theoretical foundations or cognitive architectures
+- Before implementing features in systems with intricate abstractions that need to be understood holistically
+- When exploring meta-cognitive systems, reasoning engines, or AI architectures where understanding the theory-to-implementation mapping is critical
+- Prior to refactoring or extending systems where changes could have cascading effects across architectural layers
 
 ## Steps
 

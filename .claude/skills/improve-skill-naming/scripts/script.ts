@@ -1,264 +1,250 @@
 #!/usr/bin/env bun
 
 /**
- * improve-skill-naming: Analyze and improve naming conventions in a codebase
+ * improve-skill-naming - Analyzes codebase patterns to suggest better naming conventions
  * 
- * This skill intelligently reads known files when paths are provided, and uses
- * pattern-matching to discover files when paths are unknown.
+ * This tool examines your codebase to understand architectural patterns, naming conventions,
+ * and file organization, then provides intelligent suggestions for improving consistency.
  */
 
-import { resolve, relative, basename, dirname, extname } from "path";
+import { parseArgs } from "util";
+import { intelligence, intelligenceWithSchema, z } from "engram/skill-runtime";
 
-interface NamingIssue {
-  file: string;
-  line: number;
-  type: "variable" | "function" | "class" | "file" | "constant";
-  current: string;
-  suggestion: string;
-  reason: string;
-  severity: "low" | "medium" | "high";
+const args = parseArgs({
+  args: process.argv.slice(2),
+  options: {
+    help: { type: "boolean", short: "h" },
+    pattern: { type: "string", short: "p", default: "**/*.{ts,tsx,js,jsx}" },
+    depth: { type: "string", short: "d", default: "3" },
+    focus: { type: "string", short: "f" },
+  },
+  allowPositionals: true,
+});
+
+if (args.values.help) {
+  console.log(`
+🎯 improve-skill-naming - Analyze and improve codebase naming conventions
+
+Usage: improve-skill-naming [directory] [options]
+
+Arguments:
+  directory              Target directory to analyze (default: current directory)
+
+Options:
+  -p, --pattern <glob>   File pattern to analyze (default: **/*.{ts,tsx,js,jsx})
+  -d, --depth <number>   Max directory depth to analyze (default: 3)
+  -f, --focus <path>     Focus analysis on specific file or directory
+  --help, -h            Show this help message
+
+Examples:
+  improve-skill-naming                    # Analyze current directory
+  improve-skill-naming ./src              # Analyze src directory
+  improve-skill-naming -f ./api          # Focus on API directory
+  improve-skill-naming -p "**/*.test.ts" # Analyze only test files
+`);
+  process.exit(0);
 }
 
-// Naming convention rules
-const CONVENTIONS = {
-  // Variables and functions should be camelCase
-  camelCase: /^[a-z][a-zA-Z0-9]*$/,
-  // Classes should be PascalCase
-  PascalCase: /^[A-Z][a-zA-Z0-9]*$/,
-  // Constants should be UPPER_SNAKE_CASE
-  UPPER_SNAKE_CASE: /^[A-Z][A-Z0-9_]*$/,
-  // Private properties/methods should start with _
-  private: /^_[a-z][a-zA-Z0-9]*$/,
-  // Files should be kebab-case or camelCase
-  kebabCase: /^[a-z][a-z0-9-]*$/,
+const targetDir = args.positionals[0] || process.cwd();
+const pattern = args.values.pattern as string;
+const maxDepth = parseInt(args.values.depth as string);
+const focusPath = args.values.focus as string;
+
+console.log("🔍 Analyzing codebase patterns...\n");
+
+// Step 1: Discover files
+const glob = new Bun.Glob(pattern);
+const files = await Array.fromAsync(glob.scan({ cwd: targetDir, absolute: false }));
+
+if (files.length === 0) {
+  console.error("❌ No files found matching pattern:", pattern);
+  process.exit(1);
+}
+
+// Filter by depth and focus
+const filteredFiles = files.filter((file) => {
+  const depth = file.split("/").length;
+  const matchesDepth = depth <= maxDepth;
+  const matchesFocus = !focusPath || file.startsWith(focusPath);
+  return matchesDepth && matchesFocus;
+});
+
+console.log(`📁 Found ${filteredFiles.length} files to analyze\n`);
+
+// Step 2: Analyze file structure and patterns
+interface FileAnalysis {
+  path: string;
+  directory: string;
+  filename: string;
+  extension: string;
+  exports: string[];
+  imports: string[];
+  classNames: string[];
+  functionNames: string[];
+  interfaceNames: string[];
+  typeNames: string[];
+}
+
+const analyses: FileAnalysis[] = [];
+
+console.log("📖 Reading and parsing files...");
+for (const file of filteredFiles.slice(0, 50)) { // Limit to first 50 files for performance
+  try {
+    const fullPath = `${targetDir}/${file}`;
+    const content = await Bun.file(fullPath).text();
+    const parts = file.split("/");
+    const filename = parts[parts.length - 1];
+    const directory = parts.slice(0, -1).join("/");
+    const extension = filename.split(".").pop() || "";
+
+    // Extract code elements using regex
+    const exports = Array.from(content.matchAll(/export\s+(?:default\s+)?(?:class|function|const|let|interface|type)\s+(\w+)/g)).map(m => m[1]);
+    const imports = Array.from(content.matchAll(/import.*from\s+['"](.+)['"]/g)).map(m => m[1]);
+    const classNames = Array.from(content.matchAll(/class\s+(\w+)/g)).map(m => m[1]);
+    const functionNames = Array.from(content.matchAll(/(?:function|const)\s+(\w+)\s*[=(:]/g)).map(m => m[1]);
+    const interfaceNames = Array.from(content.matchAll(/interface\s+(\w+)/g)).map(m => m[1]);
+    const typeNames = Array.from(content.matchAll(/type\s+(\w+)\s*=/g)).map(m => m[1]);
+
+    analyses.push({
+      path: file,
+      directory,
+      filename,
+      extension,
+      exports,
+      imports,
+      classNames,
+      functionNames,
+      interfaceNames,
+      typeNames,
+    });
+  } catch (error) {
+    console.error(`⚠️  Failed to read ${file}`);
+  }
+}
+
+// Step 3: Aggregate patterns
+const directoryGroups = new Map<string, FileAnalysis[]>();
+const extensionGroups = new Map<string, FileAnalysis[]>();
+const allExports = analyses.flatMap(a => a.exports);
+const allFunctions = analyses.flatMap(a => a.functionNames);
+const allClasses = analyses.flatMap(a => a.classNames);
+const allInterfaces = analyses.flatMap(a => a.interfaceNames);
+const allTypes = analyses.flatMap(a => a.typeNames);
+
+for (const analysis of analyses) {
+  const dirFiles = directoryGroups.get(analysis.directory) || [];
+  dirFiles.push(analysis);
+  directoryGroups.set(analysis.directory, dirFiles);
+
+  const extFiles = extensionGroups.get(analysis.extension) || [];
+  extFiles.push(analysis);
+  extensionGroups.set(analysis.extension, extFiles);
+}
+
+// Step 4: Display patterns found
+console.log("\n📊 Pattern Analysis Results\n");
+console.log("━".repeat(60));
+
+console.log("\n📂 Directory Structure:");
+const sortedDirs = Array.from(directoryGroups.entries()).sort((a, b) => b[1].length - a[1].length);
+for (const [dir, files] of sortedDirs.slice(0, 10)) {
+  console.log(`  ${dir || "(root)"}: ${files.length} files`);
+}
+
+console.log("\n🏷️  File Extensions:");
+for (const [ext, files] of Array.from(extensionGroups.entries()).sort((a, b) => b[1].length - a[1].length)) {
+  console.log(`  .${ext}: ${files.length} files`);
+}
+
+console.log("\n📤 Naming Conventions Detected:");
+console.log(`  Exports: ${allExports.length}`);
+console.log(`  Functions: ${allFunctions.length}`);
+console.log(`  Classes: ${allClasses.length}`);
+console.log(`  Interfaces: ${allInterfaces.length}`);
+console.log(`  Types: ${allTypes.length}`);
+
+// Step 5: Detect naming patterns
+const camelCaseCount = allFunctions.filter(n => /^[a-z][a-zA-Z0-9]*$/.test(n)).length;
+const PascalCaseCount = [...allClasses, ...allInterfaces, ...allTypes].filter(n => /^[A-Z][a-zA-Z0-9]*$/.test(n)).length;
+const kebabCaseFiles = analyses.filter(a => /^[a-z-]+\.[a-z]+$/.test(a.filename)).length;
+const camelCaseFiles = analyses.filter(a => /^[a-z][a-zA-Z0-9]*\.[a-z]+$/.test(a.filename)).length;
+
+console.log("\n🎨 Convention Usage:");
+console.log(`  Functions (camelCase): ${camelCaseCount}/${allFunctions.length}`);
+console.log(`  Classes/Types (PascalCase): ${PascalCaseCount}/${allClasses.length + allInterfaces.length + allTypes.length}`);
+console.log(`  Files (kebab-case): ${kebabCaseFiles}/${analyses.length}`);
+console.log(`  Files (camelCase): ${camelCaseFiles}/${analyses.length}`);
+
+// Step 6: Use intelligence to analyze and suggest improvements
+console.log("\n🤖 Generating intelligent recommendations...\n");
+
+const AnalysisSchema = z.object({
+  strengths: z.array(z.string()).describe("What naming conventions are working well"),
+  inconsistencies: z.array(z.object({
+    issue: z.string(),
+    examples: z.array(z.string()),
+    suggestion: z.string(),
+  })).describe("Naming inconsistencies found"),
+  recommendations: z.array(z.object({
+    category: z.string(),
+    recommendation: z.string(),
+    priority: z.enum(["high", "medium", "low"]),
+  })).describe("Specific actionable recommendations"),
+  architecturalInsights: z.array(z.string()).describe("Insights about code organization"),
+});
+
+const analysisData = {
+  directoryStructure: Array.from(directoryGroups.keys()),
+  fileCount: analyses.length,
+  sampleFiles: analyses.slice(0, 20).map(a => ({
+    path: a.path,
+    exports: a.exports,
+    classes: a.classNames,
+    functions: a.functionNames.slice(0, 5),
+  })),
+  namingStats: {
+    camelCaseCount,
+    PascalCaseCount,
+    kebabCaseFiles,
+    camelCaseFiles,
+  },
+  focusArea: focusPath || "entire codebase",
 };
 
-const targetDir = resolve(process.argv[2] || ".");
+const suggestions = await intelligenceWithSchema(
+  `Analyze this codebase's naming conventions and architectural patterns. 
+   Identify inconsistencies, suggest improvements, and provide architectural insights.
+   Be specific and actionable. Consider: file naming, function naming, class naming, 
+   directory organization, and import patterns.`,
+  AnalysisSchema,
+  { analysis: JSON.stringify(analysisData, null, 2) }
+);
 
-console.log(`🔍 Analyzing naming conventions in: ${targetDir}\n`);
-
-// Check if directory exists
-try {
-  await Bun.file(`${targetDir}/package.json`).exists();
-} catch (error) {
-  console.error(`❌ Directory not found: ${targetDir}`);
-  process.exit(1);
+// Step 7: Display recommendations
+console.log("━".repeat(60));
+console.log("\n✅ Strengths:");
+for (const strength of suggestions.strengths) {
+  console.log(`  • ${strength}`);
 }
 
-const issues: NamingIssue[] = [];
-
-// Discover TypeScript/JavaScript files
-const patterns = ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"];
-const excludePatterns = ["**/node_modules/**", "**/dist/**", "**/build/**", "**/.next/**"];
-
-async function shouldAnalyzeFile(filePath: string): Promise<boolean> {
-  for (const exclude of excludePatterns) {
-    const excludePattern = exclude.replace(/\*\*/g, ".*").replace(/\*/g, "[^/]*");
-    if (new RegExp(excludePattern).test(filePath)) {
-      return false;
-    }
-  }
-  return true;
+console.log("\n⚠️  Inconsistencies Found:");
+for (const inconsistency of suggestions.inconsistencies) {
+  console.log(`\n  ❗ ${inconsistency.issue}`);
+  console.log(`     Examples: ${inconsistency.examples.join(", ")}`);
+  console.log(`     💡 ${inconsistency.suggestion}`);
 }
 
-async function discoverFiles(): Promise<string[]> {
-  const files: string[] = [];
-  
-  for (const pattern of patterns) {
-    const glob = new Bun.Glob(pattern);
-    for await (const file of glob.scan({ cwd: targetDir, absolute: false })) {
-      const fullPath = resolve(targetDir, file);
-      if (await shouldAnalyzeFile(file)) {
-        files.push(fullPath);
-      }
-    }
-  }
-  
-  return files;
+console.log("\n🎯 Recommendations:");
+const priorityEmoji = { high: "🔴", medium: "🟡", low: "🟢" };
+for (const rec of suggestions.recommendations) {
+  console.log(`\n  ${priorityEmoji[rec.priority]} [${rec.priority.toUpperCase()}] ${rec.category}`);
+  console.log(`     ${rec.recommendation}`);
 }
 
-function toCamelCase(str: string): string {
-  return str.replace(/[-_](\w)/g, (_, c) => c.toUpperCase()).replace(/^[A-Z]/, c => c.toLowerCase());
+console.log("\n🏗️  Architectural Insights:");
+for (const insight of suggestions.architecturalInsights) {
+  console.log(`  • ${insight}`);
 }
 
-function toPascalCase(str: string): string {
-  return str.replace(/[-_](\w)/g, (_, c) => c.toUpperCase()).replace(/^[a-z]/, c => c.toUpperCase());
-}
-
-function toUpperSnakeCase(str: string): string {
-  return str.replace(/([A-Z])/g, "_$1").replace(/[-\s]/g, "_").toUpperCase().replace(/^_/, "");
-}
-
-function toKebabCase(str: string): string {
-  return str.replace(/([A-Z])/g, "-$1").replace(/[_\s]/g, "-").toLowerCase().replace(/^-/, "");
-}
-
-async function analyzeFile(filePath: string): Promise<void> {
-  const file = Bun.file(filePath);
-  const content = await file.text();
-  const lines = content.split("\n");
-  const relativePath = relative(targetDir, filePath);
-  
-  // Check filename conventions
-  const fileName = basename(filePath, extname(filePath));
-  if (!CONVENTIONS.kebabCase.test(fileName) && !CONVENTIONS.camelCase.test(fileName)) {
-    if (fileName.includes("_") || /[A-Z]/.test(fileName.charAt(0))) {
-      issues.push({
-        file: relativePath,
-        line: 0,
-        type: "file",
-        current: fileName,
-        suggestion: toKebabCase(fileName),
-        reason: "File names should use kebab-case or camelCase",
-        severity: "low",
-      });
-    }
-  }
-  
-  // Analyze code content
-  lines.forEach((line, index) => {
-    const lineNum = index + 1;
-    
-    // Check class declarations
-    const classMatch = line.match(/class\s+([a-z_][a-zA-Z0-9_]*)/);
-    if (classMatch) {
-      const className = classMatch[1];
-      if (!CONVENTIONS.PascalCase.test(className)) {
-        issues.push({
-          file: relativePath,
-          line: lineNum,
-          type: "class",
-          current: className,
-          suggestion: toPascalCase(className),
-          reason: "Class names should use PascalCase",
-          severity: "high",
-        });
-      }
-    }
-    
-    // Check constant declarations (const with UPPER naming)
-    const constMatch = line.match(/(?:export\s+)?const\s+([A-Z_][A-Z0-9_]*)\s*[:=]/);
-    if (constMatch) {
-      const constName = constMatch[1];
-      if (!CONVENTIONS.UPPER_SNAKE_CASE.test(constName) && constName === constName.toUpperCase()) {
-        issues.push({
-          file: relativePath,
-          line: lineNum,
-          type: "constant",
-          current: constName,
-          suggestion: toUpperSnakeCase(constName),
-          reason: "Constants should use UPPER_SNAKE_CASE",
-          severity: "medium",
-        });
-      }
-    }
-    
-    // Check function declarations
-    const funcMatch = line.match(/(?:function|const|let|var)\s+([A-Z][a-zA-Z0-9]*)\s*[=(:]/);
-    if (funcMatch && !line.includes("class ")) {
-      const funcName = funcMatch[1];
-      if (/^[A-Z]/.test(funcName) && !line.match(/class\s+/)) {
-        issues.push({
-          file: relativePath,
-          line: lineNum,
-          type: "function",
-          current: funcName,
-          suggestion: toCamelCase(funcName),
-          reason: "Function names should use camelCase (unless it's a constructor/component)",
-          severity: "medium",
-        });
-      }
-    }
-    
-    // Check snake_case variables (common anti-pattern in JS/TS)
-    const varMatch = line.match(/(?:const|let|var)\s+([a-z][a-z0-9_]*[_][a-z0-9_]*)\s*[:=]/);
-    if (varMatch) {
-      const varName = varMatch[1];
-      if (varName.includes("_") && varName !== varName.toUpperCase()) {
-        issues.push({
-          file: relativePath,
-          line: lineNum,
-          type: "variable",
-          current: varName,
-          suggestion: toCamelCase(varName),
-          reason: "Variable names should use camelCase, not snake_case",
-          severity: "medium",
-        });
-      }
-    }
-  });
-}
-
-// Main workflow
-try {
-  console.log("📂 Discovering files...");
-  const files = await discoverFiles();
-  console.log(`   Found ${files.length} files to analyze\n`);
-  
-  if (files.length === 0) {
-    console.log("✅ No TypeScript/JavaScript files found to analyze.");
-    process.exit(0);
-  }
-  
-  console.log("🔬 Analyzing naming conventions...");
-  let analyzed = 0;
-  for (const file of files) {
-    await analyzeFile(file);
-    analyzed++;
-    if (analyzed % 10 === 0) {
-      process.stdout.write(`\r   Analyzed ${analyzed}/${files.length} files...`);
-    }
-  }
-  console.log(`\r   Analyzed ${analyzed}/${files.length} files ✓\n`);
-  
-  // Sort issues by severity and file
-  issues.sort((a, b) => {
-    const severityOrder = { high: 0, medium: 1, low: 2 };
-    if (severityOrder[a.severity] !== severityOrder[b.severity]) {
-      return severityOrder[a.severity] - severityOrder[b.severity];
-    }
-    return a.file.localeCompare(b.file);
-  });
-  
-  // Display results
-  if (issues.length === 0) {
-    console.log("✅ No naming convention issues found! Your codebase follows good naming practices.");
-  } else {
-    console.log(`⚠️  Found ${issues.length} naming convention issues:\n`);
-    
-    const groupedByFile = issues.reduce((acc, issue) => {
-      if (!acc[issue.file]) acc[issue.file] = [];
-      acc[issue.file].push(issue);
-      return acc;
-    }, {} as Record<string, NamingIssue[]>);
-    
-    for (const [file, fileIssues] of Object.entries(groupedByFile)) {
-      console.log(`📄 ${file}`);
-      for (const issue of fileIssues) {
-        const severityIcon = issue.severity === "high" ? "🔴" : issue.severity === "medium" ? "🟡" : "🔵";
-        const location = issue.line > 0 ? `:${issue.line}` : "";
-        console.log(`   ${severityIcon} ${issue.type}${location}`);
-        console.log(`      Current:    ${issue.current}`);
-        console.log(`      Suggestion: ${issue.suggestion}`);
-        console.log(`      Reason:     ${issue.reason}`);
-      }
-      console.log();
-    }
-    
-    // Summary statistics
-    const bySeverity = issues.reduce((acc, issue) => {
-      acc[issue.severity] = (acc[issue.severity] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    
-    console.log("📊 Summary:");
-    console.log(`   🔴 High:   ${bySeverity.high || 0}`);
-    console.log(`   🟡 Medium: ${bySeverity.medium || 0}`);
-    console.log(`   🔵 Low:    ${bySeverity.low || 0}`);
-    console.log(`   Total:     ${issues.length}`);
-  }
-  
-} catch (error) {
-  console.error("❌ Error during analysis:", error);
-  process.exit(1);
-}
+console.log("\n" + "━".repeat(60));
+console.log("\n✨ Analysis complete! Use these insights to improve your codebase consistency.\n");

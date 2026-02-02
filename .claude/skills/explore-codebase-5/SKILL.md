@@ -1,27 +1,27 @@
 ---
-name: build-comprehensive
-description: Systematically explores a codebase using breadth-first reconnaissance followed by depth-first investigation to build comprehensive understanding before making architectural modifications.
+name: explore-codebase-5
+description: Performs breadth-first reconnaissance followed by depth-first investigation when modifying complex codebases.
 metadata:
   author: engram
   version: "1.0"
-  generatedAt: 2026-02-02T18:16:08.427Z
+  generatedAt: 2026-02-02T18:16:06.801Z
   sourcePatternId: 477c9c94-e6e4-4a67-9316-92ec0b157bde
   sourceSynthesisId: 3253964e-37f7-4bda-934e-182d33672cbe
 ---
 
-# Build Comprehensive
+# Explore Codebase 5
 
 ## Overview
 
-Begin by reading multiple diverse files across the codebase to establish architectural understanding and identify critical components (breadth-first phase). Once you have a concrete implementation plan, transition to focused, detailed investigation of specific target files, using pagination and multiple reads as needed to understand implementation details (depth-first phase). This two-phase approach ensures you have both high-level context and deep understanding before making changes.
+Start by reading diverse files across the codebase to establish architectural understanding and identify critical components that will be affected by your changes. Once you have a concrete implementation plan, transition to focused, detailed investigation of specific target files, using paginated reads when necessary to understand implementation details. This two-phase approach ensures you understand the system's structure before making modifications, reducing the risk of breaking changes or architectural misalignment.
 
 ## When to Use
 
-- Major refactoring tasks that affect multiple components
-- Adding new features that integrate with existing architecture
-- Debugging complex issues that require understanding system-wide interactions
-- Making changes to unfamiliar codebases where architectural understanding is critical
-- Planning modifications that have cascading effects across multiple files
+- Beginning a major refactoring that spans multiple components or modules
+- Implementing a new feature that needs to integrate with existing architectural patterns
+- Modifying code in an unfamiliar codebase where understanding dependencies is critical
+- Making changes that could have ripple effects across the system
+- Working on tasks where the initial scope is unclear and requires exploration before implementation
 
 ## Steps
 

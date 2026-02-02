@@ -4,6 +4,10 @@
   "description": "Memory evolution system for AI agents - System 2 to System 1 thinking through Hegelian dialectic",
   "module": "src/index.ts",
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./skill-runtime": "./src/skill-runtime/index.ts"
+  },
   "scripts": {
     "test": "bun test",
     "hook": "bun run scripts/engram-hook.ts",
