@@ -46,6 +46,20 @@ import type { Memory } from '../types/memory.ts';
 
 const SKILLS_DIR = './.claude/skills';
 
+/**
+ * Fetch memories by their IDs, filtering out nulls
+ */
+function fetchMemoriesByIds(db: Database, memoryIds: string[]): Memory[] {
+  const memories: Memory[] = [];
+  for (const memoryId of memoryIds) {
+    const memory = getMemory(db, memoryId);
+    if (memory) {
+      memories.push(memory);
+    }
+  }
+  return memories;
+}
+
 export class SkillGenerator {
   private db: Database;
   private skillsDir: string;
@@ -87,15 +101,8 @@ export class SkillGenerator {
     const antithesisContents = antitheses.map((a) => a.content);
 
     // Get exemplar memories
-    const exemplarMemories: Memory[] = [];
-    const exemplarContents: string[] = [];
-    for (const memoryId of synthesis.exemplarMemoryIds) {
-      const memory = getMemory(this.db, memoryId);
-      if (memory) {
-        exemplarMemories.push(memory);
-        exemplarContents.push(memory.content);
-      }
-    }
+    const exemplarMemories = fetchMemoriesByIds(this.db, synthesis.exemplarMemoryIds);
+    const exemplarContents = exemplarMemories.map((m) => m.content);
 
     // Try LLM-powered skill content generation first
     let instructions: SkillInstructions;
@@ -183,20 +190,13 @@ export class SkillGenerator {
     patternDescription: string,
     synthesis: Synthesis
   ): string {
-    let description = patternDescription;
+    const resolutionSuffixes: Record<string, string> = {
+      conditional: ' Applies under specific conditions.',
+      abstraction: ' Abstracted from multiple variations.',
+      integration: ' Integrated from multiple patterns.',
+    };
 
-    // Add resolution context
-    switch (synthesis.resolution.type) {
-      case 'conditional':
-        description += ' Applies under specific conditions.';
-        break;
-      case 'abstraction':
-        description += ' Abstracted from multiple variations.';
-        break;
-      case 'integration':
-        description += ' Integrated from multiple patterns.';
-        break;
-    }
+    let description = patternDescription + (resolutionSuffixes[synthesis.resolution.type] ?? '');
 
     // Ensure ends with punctuation
     if (!/[.!?]$/.test(description.trim())) {
@@ -305,11 +305,7 @@ export class SkillGenerator {
         const skill = await this.generateFromSynthesis(synthesis.id);
         if (skill) {
           // Get exemplar memories for script generation
-          const memories: Memory[] = [];
-          for (const memoryId of synthesis.exemplarMemoryIds) {
-            const memory = getMemory(this.db, memoryId);
-            if (memory) memories.push(memory);
-          }
+          const memories = fetchMemoriesByIds(this.db, synthesis.exemplarMemoryIds);
           await this.writeSkillFile(skill, memories);
           generated.push(skill);
         } else {

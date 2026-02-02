@@ -3,7 +3,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { queryMemories, updateMemory } from '../db/queries/memories.ts';
+import { getMemoryWithoutTracking, queryMemories, updateMemory } from '../db/queries/memories.ts';
 import { queryPatterns, updatePattern } from '../db/queries/patterns.ts';
 import { findRelatedMemories } from '../memory/processing/retriever.ts';
 import type { Memory, MemoryStage } from '../types/memory.ts';
@@ -67,8 +67,7 @@ export class StagePipeline {
    * Advance a memory to the next stage if eligible
    */
   async advanceStage(memoryId: string): Promise<StageTransitionResult | null> {
-    const memories = queryMemories(this.db, {});
-    const memory = memories.find((m) => m.id === memoryId);
+    const memory = getMemoryWithoutTracking(this.db, memoryId);
     if (!memory) return null;
 
     const currentStage = memory.metadata.stage;

@@ -216,13 +216,26 @@ async function processLLMAnalysisTask(data: { memoryIds: string[] }): Promise<vo
           },
         };
 
-        const { createMemory } = await import('../db/queries/memories.ts');
         createMemory(db, observationInput, embedding);
       }
     }
   } catch (error) {
     // LLM analysis is optional - don't fail the task
     console.error('[Worker] LLM analysis error (non-fatal):', error);
+  }
+}
+
+/**
+ * Format task data for queue display
+ */
+function formatTaskData(task: QueuedTask): Record<string, unknown> {
+  switch (task.type) {
+    case 'memory':
+      return { memoryId: (task.data as MemoryTaskData).memoryId?.slice(0, 8) };
+    case 'llm-analysis':
+      return { count: (task.data as { memoryIds: string[] }).memoryIds?.length };
+    default:
+      return {};
   }
 }
 
@@ -319,11 +332,7 @@ const server = Bun.serve({
             id: t.id,
             type: t.type,
             age: Date.now() - t.timestamp,
-            data: t.type === 'memory'
-              ? { memoryId: (t.data as MemoryTaskData).memoryId?.slice(0, 8) }
-              : t.type === 'llm-analysis'
-              ? { count: (t.data as { memoryIds: string[] }).memoryIds?.length }
-              : {}
+            data: formatTaskData(t),
           }))
         });
       },

@@ -4,7 +4,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { queryMemories, updateMemory } from '../db/queries/memories.ts';
+import { getMemoryWithoutTracking, queryMemories, updateMemory } from '../db/queries/memories.ts';
 import type { Memory, SemanticKeyValue } from '../types/memory.ts';
 
 /**
@@ -244,8 +244,7 @@ export function addSemanticKeys(
   memoryId: string,
   keys: SemanticKeyValue[]
 ): Memory | null {
-  const memories = queryMemories(db, {});
-  const memory = memories.find((m) => m.id === memoryId);
+  const memory = getMemoryWithoutTracking(db, memoryId);
   if (!memory) return null;
 
   const existingKeys = memory.metadata.semanticKeys;
