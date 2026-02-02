@@ -288,7 +288,7 @@ export async function encodeToolUsageFast(
   };
 
   // Create without embedding - worker will add it
-  return createMemory(db, input, null);
+  return createMemory(db, input, undefined);
 }
 
 /**

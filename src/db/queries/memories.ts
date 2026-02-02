@@ -2,7 +2,7 @@
  * Memory database queries
  */
 
-import type { Database } from 'bun:sqlite';
+import type { Database, SQLQueryBindings } from 'bun:sqlite';
 import { generateId, now } from '../index.ts';
 import type {
   Memory,
@@ -149,7 +149,7 @@ export function updateMemory(
 
   const timestamp = now();
   const updates: string[] = ['updated_at = ?'];
-  const values: unknown[] = [timestamp];
+  const values: SQLQueryBindings[] = [timestamp];
 
   if (input.content !== undefined) {
     updates.push('content = ?');
@@ -211,7 +211,7 @@ export function deleteMemory(db: Database, id: string): boolean {
 
 export function queryMemories(db: Database, filter: MemoryFilter): Memory[] {
   const conditions: string[] = ['1=1'];
-  const values: unknown[] = [];
+  const values: SQLQueryBindings[] = [];
 
   if (filter.types && filter.types.length > 0) {
     conditions.push(`type IN (${filter.types.map(() => '?').join(', ')})`);
@@ -274,7 +274,7 @@ export function queryMemories(db: Database, filter: MemoryFilter): Memory[] {
     values.push(filter.limit);
   }
 
-  const rows = db.query<MemoryRow, unknown[]>(query).all(...values);
+  const rows = db.query<MemoryRow, SQLQueryBindings[]>(query).all(...values);
   return rows.map(rowToMemory);
 }
 

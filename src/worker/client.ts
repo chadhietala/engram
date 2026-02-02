@@ -51,7 +51,7 @@ export async function getWorkerStatus(): Promise<WorkerStatus | null> {
 
     clearTimeout(timeout);
     if (response.ok) {
-      return await response.json();
+      return await response.json() as WorkerStatus;
     }
     return null;
   } catch {

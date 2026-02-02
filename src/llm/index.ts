@@ -202,7 +202,7 @@ async function isSdkAvailable(): Promise<boolean> {
 /**
  * Convert Zod schema to SDK-compatible JSON Schema
  */
-function zodToJsonSchema(schema: z.ZodType): object {
+function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
   const jsonSchema = z.toJSONSchema(schema) as Record<string, unknown>;
   // Remove fields that may cause issues with the SDK
   delete jsonSchema.$schema;

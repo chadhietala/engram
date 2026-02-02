@@ -2,7 +2,7 @@
  * Skill database queries
  */
 
-import type { Database } from 'bun:sqlite';
+import type { Database, SQLQueryBindings } from 'bun:sqlite';
 import { generateId, now } from '../index.ts';
 import type {
   Skill,
@@ -115,7 +115,7 @@ export function updateSkill(
 ): Skill | null {
   const timestamp = now();
   const setClauses: string[] = ['updated_at = ?'];
-  const values: unknown[] = [timestamp];
+  const values: SQLQueryBindings[] = [timestamp];
 
   if (updates.name !== undefined) {
     setClauses.push('name = ?');
@@ -172,7 +172,7 @@ export function querySkills(
   } = {}
 ): Skill[] {
   const conditions: string[] = ['1=1'];
-  const values: unknown[] = [];
+  const values: SQLQueryBindings[] = [];
 
   if (filter.status) {
     conditions.push('status = ?');
@@ -191,7 +191,7 @@ export function querySkills(
     values.push(filter.limit);
   }
 
-  const rows = db.query<SkillRow, unknown[]>(query).all(...values);
+  const rows = db.query<SkillRow, SQLQueryBindings[]>(query).all(...values);
   return rows.map(rowToSkill);
 }
 
