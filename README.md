@@ -37,6 +37,30 @@ Claude analyzes your patterns and generates insights like:
 
 When a pattern matures enough (used consistently, survived contradictions), Engram generates a Claude Skill you can use in future sessions.
 
+### Hybrid Skill Scripts
+
+Generated skills aren't just static instructions—they're executable scripts that combine:
+
+- **Deterministic code** for file operations, glob patterns, shell commands
+- **Intelligence points** for LLM-powered reasoning where judgment is needed
+
+```typescript
+// Deterministic: gather data
+const files = await glob.scan({ pattern: "**/*.ts" });
+const diff = await $`git diff --cached`.text();
+
+// Intelligence point: generate insights
+const summary = await intelligence(
+  "Summarize the key patterns in this codebase",
+  { files: fileList, diff }
+);
+
+// Deterministic: output results
+console.log(summary);
+```
+
+This creates scripts that are both reliable and intelligent.
+
 ### Memory Consolidation
 
 Like human memory:
@@ -80,20 +104,34 @@ bun src/worker/index.ts
 
 ## Example Generated Skill
 
-After observing you repeatedly read files then run related commands:
+After observing codebase exploration patterns, Engram generates a hybrid script:
 
-```markdown
-# Read Bash Pattern
+```typescript
+#!/usr/bin/env bun
+import { intelligence } from "engram/skill-runtime";
 
-## Overview
-This skill analyzes file characteristics (path, extension, location)
-and intelligently selects appropriate operations.
+// Deterministic: discover files
+const glob = new Bun.Glob("**/*.ts");
+const files = [];
+for await (const file of glob.scan({ cwd: targetDir })) {
+  files.push(file);
+}
 
-## When to Use
-- When you need to process files differently based on their type
-- When operations require both reading file contents and executing commands
-- When file analysis must inform subsequent command execution
+// Deterministic: read contents
+const contents = await Promise.all(
+  files.map(f => Bun.file(f).text())
+);
+
+// Intelligence point: analyze with LLM reasoning
+const analysis = await intelligence(
+  "Identify the key architectural patterns in this codebase",
+  { files: files.join("\n"), sampleCode: contents[0] }
+);
+
+console.log(analysis);
 ```
+
+The script uses deterministic code for file operations but calls `intelligence()` when human-like judgment is needed.
 
 ## Checking Your Memory
 
@@ -116,6 +154,39 @@ Contradictions refine → Skills generate → You get better tools
 ```
 
 The more you use Claude Code, the smarter it gets about how *you* work.
+
+## Using Generated Skills
+
+Generated skills are placed in `.claude/skills/` and can be run directly:
+
+```bash
+# Run a generated skill
+bun .claude/skills/explore-codebase/scripts/script.ts ./src
+
+# Skills support --help
+bun .claude/skills/explore-codebase/scripts/script.ts --help
+```
+
+### Skill Runtime
+
+Generated scripts can import intelligence helpers:
+
+```typescript
+import { intelligence, intelligenceWithSchema, decide, z } from "engram/skill-runtime";
+
+// Simple text response
+const summary = await intelligence("Summarize this code", { code });
+
+// Structured response with schema
+const ReviewSchema = z.object({
+  approved: z.boolean(),
+  issues: z.array(z.string()),
+});
+const review = await intelligenceWithSchema("Review this PR", ReviewSchema, { diff });
+
+// Yes/no decision
+const shouldProceed = await decide("Is this safe to deploy?", { changes });
+```
 
 ## Privacy
 
