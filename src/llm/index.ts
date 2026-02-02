@@ -74,13 +74,8 @@ Identify:
 - The type of observation (discovery, pattern, decision, change, or gotcha)
 - Your confidence level (0.0 to 1.0)`;
 
-  try {
-    const result = await queryWithSchema(prompt, PatternAnalysisSchema);
-    return result;
-  } catch (error) {
-    console.error('[LLM] Pattern analysis failed:', error);
-    return fallbackPatternAnalysis(memories);
-  }
+  const result = await queryWithSchema(prompt, PatternAnalysisSchema);
+  return result;
 }
 
 /**
@@ -113,13 +108,8 @@ ${contextSummary}
 
 Analyze why the evidence contradicts the thesis, what context factors explain when each approach applies, and how they might be reconciled.`;
 
-  try {
-    const result = await queryWithSchema(prompt, ContradictionAnalysisSchema);
-    return result;
-  } catch (error) {
-    console.error('[LLM] Contradiction analysis failed:', error);
-    return fallbackContradictionAnalysis(thesis, contradictingMemory);
-  }
+  const result = await queryWithSchema(prompt, ContradictionAnalysisSchema);
+  return result;
 }
 
 /**
@@ -154,13 +144,8 @@ Create a synthesis that:
 - Lists conditions that determine which approach to use
 - Abstracts a higher-level principle that encompasses both thesis and antitheses`;
 
-  try {
-    const result = await queryWithSchema(prompt, SynthesisAnalysisSchema);
-    return result;
-  } catch (error) {
-    console.error('[LLM] Synthesis analysis failed:', error);
-    return fallbackSynthesisAnalysis(thesis, antitheses);
-  }
+  const result = await queryWithSchema(prompt, SynthesisAnalysisSchema);
+  return result;
 }
 
 /**
@@ -198,13 +183,8 @@ Create:
 - 2-4 sentences explaining how to use this skill
 - A list of scenarios when this skill is useful`;
 
-  try {
-    const result = await queryWithSchema(prompt, SkillContentSchema);
-    return result;
-  } catch (error) {
-    console.error('[LLM] Skill generation failed:', error);
-    return fallbackSkillContent(synthesis, exemplarMemories);
-  }
+  const result = await queryWithSchema(prompt, SkillContentSchema);
+  return result;
 }
 
 // ============ Claude Agent SDK Integration ============
@@ -272,53 +252,3 @@ async function queryWithSchema<T extends z.ZodType>(
   throw new Error('No result message received');
 }
 
-// ============ Fallbacks ============
-
-function fallbackPatternAnalysis(memories: Memory[]): PatternAnalysis {
-  const toolNames = [...new Set(memories.map(m => m.metadata.toolName).filter(Boolean))];
-  const tags = [...new Set(memories.flatMap(m => m.metadata.tags))];
-
-  return {
-    insight: toolNames.length === 1
-      ? `Pattern using ${toolNames[0]} for ${tags.slice(0, 2).join(', ')} operations`
-      : `Complex pattern involving ${toolNames.join(', ')}`,
-    concepts: tags.slice(0, 3),
-    observationType: 'pattern',
-    confidence: 0.5,
-  };
-}
-
-function fallbackContradictionAnalysis(
-  thesis: Thesis,
-  contradictingMemory: Memory
-): ContradictionAnalysis {
-  return {
-    explanation: `Evidence contradicts thesis: different outcome observed`,
-    contextFactors: ['context', 'input-variation'],
-    resolutionHint: 'May be context-dependent',
-  };
-}
-
-function fallbackSynthesisAnalysis(
-  thesis: Thesis,
-  antitheses: Antithesis[]
-): SynthesisAnalysis {
-  return {
-    resolution: `Pattern "${thesis.content}" with variations`,
-    conditions: antitheses.map(a => a.contradictionType),
-    abstractedPattern: 'Context-dependent application',
-  };
-}
-
-function fallbackSkillContent(
-  synthesis: Synthesis,
-  exemplarMemories: Memory[]
-): SkillContent {
-  const tools = [...new Set(exemplarMemories.map(m => m.metadata.toolName).filter(Boolean))];
-
-  return {
-    description: `Learned pattern using ${tools.join(', ')}`,
-    instructions: 'Apply this pattern when working on similar tasks.',
-    whenToUse: ['Similar tasks', 'Related workflows'],
-  };
-}

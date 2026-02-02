@@ -6,9 +6,6 @@ import type {
   Skill,
   SkillFrontmatter,
   SkillInstructions,
-  SkillStep,
-  SkillExample,
-  SkillEdgeCase,
   SkillComplexity,
 } from '../types/skill.ts';
 
@@ -199,73 +196,6 @@ export function generateSkillMarkdown(skill: Skill): string {
   }
 
   return sections.join('\n').trim() + '\n';
-}
-
-/**
- * Build skill instructions from synthesis data
- */
-export function buildInstructionsFromSynthesis(
-  synthesisContent: string,
-  thesisContent: string,
-  antithesisContents: string[],
-  exemplarContents: string[]
-): SkillInstructions {
-  // Extract overview from synthesis
-  const overview = synthesisContent.length > 200
-    ? synthesisContent.substring(0, 200) + '...'
-    : synthesisContent;
-
-  // Extract "when to use" from thesis
-  const whenToUse: string[] = [thesisContent];
-
-  // Extract steps from exemplar contents
-  const steps: SkillStep[] = [];
-  let stepOrder = 1;
-
-  for (const content of exemplarContents.slice(0, 10)) {
-    // Extract tool actions from content
-    const toolMatch = content.match(/Tool: (\w+)/);
-    if (toolMatch) {
-      steps.push({
-        order: stepOrder++,
-        action: `Use ${toolMatch[1]} tool`,
-        details: content.substring(0, 100),
-      });
-    }
-  }
-
-  // If no steps extracted, add generic step
-  if (steps.length === 0) {
-    steps.push({
-      order: 1,
-      action: 'Follow the pattern described in the overview',
-    });
-  }
-
-  // Build examples from exemplars
-  const examples: SkillExample[] = [];
-  if (exemplarContents.length > 0) {
-    examples.push({
-      scenario: 'Basic usage',
-      steps: exemplarContents.slice(0, 3).map((c) =>
-        c.substring(0, 80).replace(/\n/g, ' ')
-      ),
-    });
-  }
-
-  // Build edge cases from antitheses
-  const edgeCases: SkillEdgeCase[] = antithesisContents.map((content) => ({
-    condition: 'When conditions differ',
-    handling: content,
-  }));
-
-  return {
-    overview,
-    whenToUse,
-    steps,
-    examples,
-    edgeCases,
-  };
 }
 
 /**

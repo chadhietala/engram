@@ -5,7 +5,6 @@
 import type { Database } from 'bun:sqlite';
 import {
   createSkill,
-  getSkill,
   getSkillByName,
   updateSkill,
   querySkills,
@@ -25,7 +24,6 @@ import {
 } from './validator.ts';
 import {
   generateSkillMarkdown,
-  buildInstructionsFromSynthesis,
   determineComplexity,
 } from './template.ts';
 import {
@@ -39,9 +37,7 @@ import type {
   SkillCreateInput,
   SkillInstructions,
   SkillValidationResult,
-  SkillEdgeCase,
 } from '../types/skill.ts';
-import type { Synthesis } from '../types/dialectic.ts';
 import type { Memory } from '../types/memory.ts';
 
 const SKILLS_DIR = './.claude/skills';
@@ -102,43 +98,28 @@ export class SkillGenerator {
 
     // Get exemplar memories
     const exemplarMemories = fetchMemoriesByIds(this.db, synthesis.exemplarMemoryIds);
-    const exemplarContents = exemplarMemories.map((m) => m.content);
 
-    // Try LLM-powered skill content generation first
-    let instructions: SkillInstructions;
-    let llmDescription: string | null = null;
+    // Generate LLM-powered skill content (required - no fallback)
+    console.error(`[SkillGenerator] Generating LLM-powered skill content...`);
+    const llmContent = await generateSkillContent(synthesis, exemplarMemories);
 
-    try {
-      console.error(`[SkillGenerator] Generating LLM-powered skill content...`);
-      const llmContent = await generateSkillContent(synthesis, exemplarMemories);
-
-      // Map LLM output to SkillInstructions
-      instructions = {
-        overview: llmContent.instructions,
-        whenToUse: llmContent.whenToUse,
-        steps: [{
-          order: 1,
-          action: 'Follow the pattern described above',
-          details: synthesis.content.substring(0, 200),
-        }],
-        examples: [],
-        edgeCases: antithesisContents.map((content) => ({
-          condition: 'When conditions differ',
-          handling: content,
-        })),
-      };
-      llmDescription = llmContent.description;
-      console.error(`[SkillGenerator] LLM content generated successfully`);
-    } catch (error) {
-      console.error(`[SkillGenerator] LLM generation failed, using template:`, error);
-      // Fall back to template-based generation
-      instructions = buildInstructionsFromSynthesis(
-        synthesis.content,
-        thesis.content,
-        antithesisContents,
-        exemplarContents
-      );
-    }
+    // Map LLM output to SkillInstructions
+    const instructions: SkillInstructions = {
+      overview: llmContent.instructions,
+      whenToUse: llmContent.whenToUse,
+      steps: [{
+        order: 1,
+        action: 'Follow the pattern described above',
+        details: synthesis.content.substring(0, 200),
+      }],
+      examples: [],
+      edgeCases: antithesisContents.map((content) => ({
+        condition: 'When conditions differ',
+        handling: content,
+      })),
+    };
+    const llmDescription = llmContent.description;
+    console.error(`[SkillGenerator] LLM content generated successfully`);
 
     // Generate skill name
     const baseName = generateValidSkillName(pattern.name);
@@ -151,8 +132,8 @@ export class SkillGenerator {
       counter++;
     }
 
-    // Generate description (prefer LLM-generated if available)
-    const description = llmDescription || this.generateDescription(pattern.description, synthesis);
+    // Use LLM-generated description
+    const description = llmDescription;
 
     // Determine complexity
     const complexity = determineComplexity(instructions);
@@ -181,34 +162,6 @@ export class SkillGenerator {
     }
 
     return skill;
-  }
-
-  /**
-   * Generate description from pattern and synthesis
-   */
-  private generateDescription(
-    patternDescription: string,
-    synthesis: Synthesis
-  ): string {
-    const resolutionSuffixes: Record<string, string> = {
-      conditional: ' Applies under specific conditions.',
-      abstraction: ' Abstracted from multiple variations.',
-      integration: ' Integrated from multiple patterns.',
-    };
-
-    let description = patternDescription + (resolutionSuffixes[synthesis.resolution.type] ?? '');
-
-    // Ensure ends with punctuation
-    if (!/[.!?]$/.test(description.trim())) {
-      description = description.trim() + '.';
-    }
-
-    // Truncate if too long
-    if (description.length > 1024) {
-      description = description.substring(0, 1020) + '...';
-    }
-
-    return description;
   }
 
   /**

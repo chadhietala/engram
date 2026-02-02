@@ -1,6 +1,6 @@
 /**
  * Synthesis management - pattern resolution
- * Uses LLM for rich synthesis insights when available
+ * Uses LLM for synthesis insights (required)
  */
 
 import type { Database } from 'bun:sqlite';
@@ -10,7 +10,6 @@ import {
   markAsSkillCandidate,
   getSkillCandidates,
   getThesis,
-  getAntithesis,
   getAntithesesByThesis,
   addExemplarToSynthesis,
   resolveCycle,
@@ -77,63 +76,18 @@ export function determineResolutionType(
 }
 
 /**
- * Generate synthesis content
- * Tries LLM for rich insights, falls back to templates
+ * Generate synthesis content using LLM
+ * LLM is required - errors propagate if unavailable
  */
 export async function generateSynthesisContent(
   thesis: Thesis,
   antitheses: Antithesis[],
-  resolutionType: ResolutionType,
+  _resolutionType: ResolutionType,
   exemplarMemories: Memory[] = []
 ): Promise<string> {
-  // Try LLM analysis first
-  try {
-    const analysis = await llmAnalyzeSynthesis(thesis, antitheses, exemplarMemories);
-    if (analysis.resolution.length > 20) {
-      return analysis.resolution;
-    }
-  } catch {
-    // LLM not available, use templates
-  }
-
-  return generateSynthesisContentHeuristic(thesis, antitheses, resolutionType);
-}
-
-/**
- * Synchronous heuristic-based synthesis content
- */
-export function generateSynthesisContentSync(
-  thesis: Thesis,
-  antitheses: Antithesis[],
-  resolutionType: ResolutionType
-): string {
-  return generateSynthesisContentHeuristic(thesis, antitheses, resolutionType);
-}
-
-function generateSynthesisContentHeuristic(
-  thesis: Thesis,
-  antitheses: Antithesis[],
-  resolutionType: ResolutionType
-): string {
-  switch (resolutionType) {
-    case 'rejection':
-      return `Original pattern "${thesis.content}" was found to be incorrect. ` +
-        `Contradicted by: ${antitheses.map((a) => a.content).join('; ')}`;
-
-    case 'conditional':
-      const conditions = antitheses.map((a) => a.content);
-      return `Pattern "${thesis.content}" applies conditionally: ` +
-        `Conditions: ${conditions.join('; ')}`;
-
-    case 'abstraction':
-      return `Abstracted pattern from "${thesis.content}": ` +
-        `Incorporates variations: ${antitheses.map((a) => a.content).join('; ')}`;
-
-    case 'integration':
-    default:
-      return `Integrated pattern combining thesis "${thesis.content}" ` +
-        `with considerations: ${antitheses.map((a) => a.content).join('; ')}`;
-  }
+  const analysis = await llmAnalyzeSynthesis(thesis, antitheses, exemplarMemories);
+  // Return whatever the LLM produces
+  return analysis.resolution;
 }
 
 /**
@@ -158,7 +112,7 @@ function generateAbstraction(thesis: Thesis, antitheses: Antithesis[]): string {
 
 /**
  * Create a synthesis from thesis and antitheses
- * Uses LLM for rich content when available
+ * Uses LLM for content generation (required)
  */
 export async function synthesize(
   db: Database,

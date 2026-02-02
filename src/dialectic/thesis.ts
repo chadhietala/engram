@@ -1,6 +1,6 @@
 /**
  * Thesis management for the dialectic process
- * Uses LLM for rich pattern insights when available
+ * Uses LLM for pattern insights (required)
  */
 
 import type { Database } from 'bun:sqlite';
@@ -142,69 +142,14 @@ export function hasEnoughSupport(
 }
 
 /**
- * Generate thesis content from memories
- * Tries LLM for rich insights, falls back to heuristics
+ * Generate thesis content from memories using LLM
+ * LLM is required - errors propagate if unavailable
  */
 export async function generateThesisContent(memories: Memory[]): Promise<string> {
-  // Try LLM analysis first
-  try {
-    const analysis = await analyzePattern(memories);
-    if (analysis.confidence >= 0.5 && analysis.insight.length > 20) {
-      return analysis.insight;
-    }
-  } catch {
-    // LLM not available, use heuristics
+  const analysis = await analyzePattern(memories);
+  if (analysis.confidence >= 0.5 && analysis.insight.length > 20) {
+    return analysis.insight;
   }
-
-  return generateThesisContentHeuristic(memories);
-}
-
-/**
- * Synchronous heuristic-based thesis content generation
- */
-export function generateThesisContentSync(memories: Memory[]): string {
-  return generateThesisContentHeuristic(memories);
-}
-
-function generateThesisContentHeuristic(memories: Memory[]): string {
-  // Find common patterns in memories
-  const toolUsages = memories.filter((m) => m.metadata.source === 'tool_use');
-  const toolNames = [...new Set(toolUsages.map((m) => m.metadata.toolName).filter(Boolean))];
-
-  if (toolNames.length === 1) {
-    const toolName = toolNames[0];
-    const commonTags = findCommonTags(memories);
-
-    return `When performing ${commonTags.join(', ')} operations, use ${toolName} tool with observed patterns.`;
-  }
-
-  if (toolNames.length > 1) {
-    return `Complex operation involving ${toolNames.join(', ')} tools following observed sequence.`;
-  }
-
-  // Generic thesis
-  const commonTags = findCommonTags(memories);
-  if (commonTags.length > 0) {
-    return `Pattern observed in ${commonTags.join(', ')} operations.`;
-  }
-
-  return 'Pattern observed across multiple operations.';
-}
-
-function findCommonTags(memories: Memory[]): string[] {
-  if (memories.length === 0) return [];
-
-  const tagCounts = new Map<string, number>();
-
-  for (const memory of memories) {
-    for (const tag of memory.metadata.tags) {
-      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
-    }
-  }
-
-  // Return tags that appear in at least half the memories
-  const threshold = memories.length / 2;
-  return [...tagCounts.entries()]
-    .filter(([, count]) => count >= threshold)
-    .map(([tag]) => tag);
+  // Low confidence or short insight - still return it rather than failing
+  return analysis.insight;
 }
