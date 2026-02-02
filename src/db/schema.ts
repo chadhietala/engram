@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS syntheses (
   content TEXT NOT NULL,
   resolution TEXT NOT NULL,
   skill_candidate INTEGER DEFAULT 0,
+  tool_data TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   FOREIGN KEY (thesis_id) REFERENCES theses(id) ON DELETE CASCADE
@@ -265,7 +266,11 @@ CREATE TRIGGER IF NOT EXISTS semantic_keys_fts_insert AFTER INSERT ON semantic_k
 END;
 `;
 
-export const MIGRATIONS: string[] = [];
+export const MIGRATIONS: string[] = [
+  // Migration 1: Add tool_data column to syntheses table
+  // Stores serialized tool sequence data at synthesis time to prevent data loss when memories decay
+  `ALTER TABLE syntheses ADD COLUMN tool_data TEXT`,
+];
 
 /**
  * Rebuild FTS5 index from existing memories

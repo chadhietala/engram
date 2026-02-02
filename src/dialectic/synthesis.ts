@@ -25,8 +25,10 @@ import type {
   ResolutionType,
   Thesis,
   Antithesis,
+  ToolDataSnapshot,
 } from '../types/dialectic.ts';
 import type { Memory } from '../types/memory.ts';
+import { promoteMemory } from '../db/queries/memories.ts';
 
 /**
  * Synthesis generation options
@@ -40,6 +42,44 @@ const DEFAULT_OPTIONS: SynthesisOptions = {
   minExemplars: 3,
   minConfidence: 0.6,
 };
+
+/**
+ * Extract tool data snapshots from memories to preserve for script generation
+ */
+export function extractToolDataFromMemories(memories: Memory[]): ToolDataSnapshot[] {
+  const toolData: ToolDataSnapshot[] = [];
+
+  for (const memory of memories) {
+    const toolName = memory.metadata.toolName;
+    if (toolName) {
+      toolData.push({
+        tool: toolName,
+        action: memory.metadata.toolInput?.command as string | undefined,
+        parameters: memory.metadata.toolInput as Record<string, unknown> | undefined,
+        description: memory.content.substring(0, 150),
+      });
+    }
+  }
+
+  return toolData;
+}
+
+/**
+ * Promote exemplar memories to long-term storage when they become part of a synthesis
+ * This prevents memory decay from deleting important exemplars
+ */
+export function promoteExemplarMemories(
+  db: Database,
+  memoryIds: string[]
+): void {
+  for (const memoryId of memoryIds) {
+    try {
+      promoteMemory(db, memoryId, 'long_term');
+    } catch {
+      // Memory may already be deleted or promoted
+    }
+  }
+}
 
 /**
  * Determine the appropriate resolution type
@@ -159,15 +199,22 @@ export async function synthesize(
     resolution.abstraction = generateAbstraction(thesis, antitheses);
   }
 
+  // Extract tool data from exemplar memories before they could be deleted by decay
+  const toolData = extractToolDataFromMemories(exemplarMemories);
+
   const input: SynthesisCreateInput = {
     thesisId,
     antithesisIds: antitheses.map((a) => a.id),
     content,
     resolution,
     exemplarMemoryIds: [...exemplarMemoryIds],
+    toolData: toolData.length > 0 ? toolData : undefined,
   };
 
   const synthesis = createSynthesis(db, input);
+
+  // Promote exemplar memories to long-term to prevent decay from deleting them
+  promoteExemplarMemories(db, [...exemplarMemoryIds]);
 
   // Resolve the dialectic cycle
   const pattern = getPattern(db, thesis.patternId);

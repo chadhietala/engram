@@ -47,6 +47,16 @@ export interface SynthesisResolution {
   abstraction?: string;
 }
 
+/**
+ * Snapshot of tool usage data, stored at synthesis time to prevent loss when memories decay
+ */
+export interface ToolDataSnapshot {
+  tool: string;
+  action?: string;
+  parameters?: Record<string, unknown>;
+  description?: string;
+}
+
 export interface Synthesis {
   id: string;
   thesisId: string;
@@ -55,6 +65,7 @@ export interface Synthesis {
   resolution: SynthesisResolution;
   skillCandidate: boolean;
   exemplarMemoryIds: string[];
+  toolData?: ToolDataSnapshot[];
   createdAt: number;
   updatedAt: number;
 }
@@ -96,4 +107,5 @@ export interface SynthesisCreateInput {
   content: string;
   resolution: SynthesisResolution;
   exemplarMemoryIds: string[];
+  toolData?: ToolDataSnapshot[];
 }

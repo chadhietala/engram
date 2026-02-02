@@ -15,6 +15,7 @@ import type {
   SynthesisCreateInput,
   SynthesisResolution,
   DialecticCycle,
+  ToolDataSnapshot,
 } from '../../types/dialectic.ts';
 
 // ============= Thesis Queries =============
@@ -246,6 +247,7 @@ interface SynthesisRow {
   content: string;
   resolution: string;
   skill_candidate: number;
+  tool_data: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -263,6 +265,7 @@ function rowToSynthesis(
     skillCandidate: row.skill_candidate === 1,
     antithesisIds,
     exemplarMemoryIds,
+    toolData: row.tool_data ? JSON.parse(row.tool_data) as ToolDataSnapshot[] : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -274,16 +277,18 @@ export function createSynthesis(
 ): Synthesis {
   const id = generateId();
   const timestamp = now();
+  const toolDataJson = input.toolData ? JSON.stringify(input.toolData) : null;
 
   db.run(
-    `INSERT INTO syntheses (id, thesis_id, content, resolution, skill_candidate, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO syntheses (id, thesis_id, content, resolution, skill_candidate, tool_data, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.thesisId,
       input.content,
       JSON.stringify(input.resolution),
       0,
+      toolDataJson,
       timestamp,
       timestamp,
     ]
@@ -316,6 +321,7 @@ export function createSynthesis(
     resolution: input.resolution,
     skillCandidate: false,
     exemplarMemoryIds: input.exemplarMemoryIds,
+    toolData: input.toolData,
     createdAt: timestamp,
     updatedAt: timestamp,
   };

@@ -41,6 +41,7 @@ import type {
   SkillValidationResult,
 } from '../types/skill.ts';
 import type { Memory } from '../types/memory.ts';
+import type { ToolDataSnapshot } from '../types/dialectic.ts';
 
 const SKILLS_DIR = './.claude/skills';
 
@@ -303,7 +304,8 @@ export class SkillGenerator {
   async writeSkillFile(
     skill: Skill,
     memories?: Memory[],
-    synthesisContent?: string
+    synthesisContent?: string,
+    toolDataSnapshot?: ToolDataSnapshot[]
   ): Promise<string> {
     const content = generateSkillMarkdown(skill);
     const dirPath = `${this.skillsDir}/${skill.name}`;
@@ -318,41 +320,89 @@ export class SkillGenerator {
     // Write SKILL.md
     await Bun.write(filePath, content);
 
-    // Generate intelligent LLM-powered script
-    if (memories && memories.length > 0) {
-      console.error(`[SkillGenerator] Generating intelligent script via LLM...`);
+    // Prepare tool examples from either toolData snapshot (preferred) or memories (fallback)
+    // This ensures script generation works even when memories have been deleted by decay
+    // Include full parameters for the LLM to understand the actual operations
+    let toolExamples: { tool: string; description?: string; parameters?: Record<string, unknown> }[] = [];
 
-      // Prepare tool usage examples for LLM
-      const toolExamples = memories.slice(0, 10).map(m => ({
+    if (toolDataSnapshot && toolDataSnapshot.length > 0) {
+      // Use the snapshot (preserved at synthesis time, immune to memory decay)
+      console.error(`[SkillGenerator] Using toolData snapshot with ${toolDataSnapshot.length} entries`);
+      toolExamples = toolDataSnapshot.slice(0, 15).map(td => ({
+        tool: td.tool,
+        description: td.description,
+        parameters: td.parameters,
+      }));
+    } else if (memories && memories.length > 0) {
+      // Fall back to fetching from memories (may be incomplete due to decay)
+      console.error(`[SkillGenerator] Falling back to memories (${memories.length} available)`);
+      toolExamples = memories.slice(0, 15).map(m => ({
         tool: m.metadata.toolName || 'unknown',
         description: m.content.substring(0, 150),
+        parameters: m.metadata.toolInput as Record<string, unknown> | undefined,
       }));
+    }
 
-      try {
-        const scriptResult = await generateSkillScript(
-          skill.name,
-          skill.description,
-          synthesisContent || skill.instructions.overview,
-          toolExamples
-        );
+    // Generate intelligent LLM-powered script
+    // Even without tool data, the LLM can generate useful scripts from synthesis content
+    console.error(`[SkillGenerator] Generating intelligent script via LLM...`);
+    if (toolExamples.length > 0) {
+      console.error(`[SkillGenerator] Using ${toolExamples.length} tool examples`);
+    } else {
+      console.error(`[SkillGenerator] No tool data - generating from synthesis content only`);
+    }
 
-        await Bun.write(scriptPath, scriptResult.script);
-        await Bun.spawn(['chmod', '+x', scriptPath]).exited;
-        console.error(`[SkillGenerator] Generated intelligent script: ${scriptResult.explanation}`);
-      } catch (error) {
-        console.error(`[SkillGenerator] Failed to generate LLM script, falling back to basic:`, error);
-        // Fall back to basic script generation
-        const procedure = generateProcedure(memories, skill.name, skill.description);
-        const script = generateExecutableScript(skill, procedure);
-        await Bun.write(scriptPath, script);
-        await Bun.spawn(['chmod', '+x', scriptPath]).exited;
-      }
+    try {
+      const scriptResult = await generateSkillScript(
+        skill.name,
+        skill.description,
+        synthesisContent || skill.instructions.overview,
+        toolExamples
+      );
+
+      await Bun.write(scriptPath, scriptResult.script);
+      await Bun.spawn(['chmod', '+x', scriptPath]).exited;
+      console.error(`[SkillGenerator] Generated intelligent script: ${scriptResult.explanation}`);
+    } catch (error) {
+      console.error(`[SkillGenerator] Failed to generate LLM script:`, error);
+      // Generate a minimal placeholder script as last resort
+      const placeholderScript = this.generatePlaceholderScript(skill);
+      await Bun.write(scriptPath, placeholderScript);
+      await Bun.spawn(['chmod', '+x', scriptPath]).exited;
+      console.error(`[SkillGenerator] Generated placeholder script (LLM failed)`);
     }
 
     // Update skill with file path
     updateSkill(this.db, skill.id, { filePath, status: 'validated' });
 
     return filePath;
+  }
+
+  /**
+   * Generate a placeholder script when no tool data is available
+   */
+  private generatePlaceholderScript(skill: Skill): string {
+    return `#!/usr/bin/env bun
+/**
+ * ${skill.name} - Skill Script
+ * ${skill.description}
+ *
+ * This is a placeholder script. The original tool usage data was not available
+ * at generation time. Please regenerate this skill with fresh exemplar data.
+ *
+ * Usage: bun ${skill.name}/scripts/script.ts [target-path]
+ */
+
+const targetPath = process.argv[2] || '.';
+
+console.log(\`Running ${skill.name} on: \${targetPath}\`);
+console.log('');
+console.log('Instructions:');
+console.log('${skill.instructions.overview.replace(/'/g, "\\'")}');
+console.log('');
+console.log('Steps:');
+${skill.instructions.steps.map((step, i) => `console.log('${i + 1}. ${step.action.replace(/'/g, "\\'")}');`).join('\n')}
+`;
   }
 
   /**
@@ -416,8 +466,9 @@ export class SkillGenerator {
         const skill = await this.generateFromSynthesis(synthesis.id);
         if (skill) {
           // Get exemplar memories for script generation
+          // Fall back to fetching by IDs if toolData snapshot is not available
           const memories = fetchMemoriesByIds(this.db, synthesis.exemplarMemoryIds);
-          await this.writeSkillFile(skill, memories, synthesis.content);
+          await this.writeSkillFile(skill, memories, synthesis.content, synthesis.toolData);
           generated.push(skill);
         } else {
           failed.push(synthesis.id);

@@ -213,7 +213,7 @@ function generateSemanticPatternName(memories: Memory[]): string {
       // Extract file extension from file paths
       if (typeof input.file_path === 'string') {
         const match = input.file_path.match(/\.([a-z0-9]+)$/i);
-        if (match) {
+        if (match && match[1]) {
           fileExtensions.push(match[1].toLowerCase());
         }
       }

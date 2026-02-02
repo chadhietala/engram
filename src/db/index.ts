@@ -39,9 +39,13 @@ export function initializeDatabase(dbPath: string = DEFAULT_DB_PATH): Database {
   // Run schema
   database.run(SCHEMA);
 
-  // Run migrations
+  // Run migrations (ignore errors for already-applied migrations)
   for (const migration of MIGRATIONS) {
-    database.run(migration);
+    try {
+      database.run(migration);
+    } catch {
+      // Migration may have already been applied
+    }
   }
 
   // Check if FTS5 needs to be synced

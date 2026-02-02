@@ -1,41 +1,41 @@
 ---
 name: explore-codebase
-description: Systematically locate and understand how specific functionality is implemented across a codebase
+description: A systematic codebase exploration skill that guides you through understanding unfamiliar code by first surveying structure and documentation, then progressively drilling into implementation details.
 metadata:
   author: engram
   version: "1.0"
-  generatedAt: 2026-02-02T14:27:23.066Z
-  sourcePatternId: ca9a7667-8d0a-4d52-ac4f-99436220c3d3
-  sourceSynthesisId: 86f883ac-6655-4af1-9996-9562e3306936
+  generatedAt: 2026-02-02T16:01:06.731Z
+  sourcePatternId: 7a9911fe-ffe3-4437-9177-b91c57edc187
+  sourceSynthesisId: cbfd1bbb-18c3-4093-8beb-bf29da2e2307
 ---
 
 # Explore Codebase
 
 ## Overview
 
-When you need to understand how a feature works or find where specific functionality lives in an unfamiliar codebase, start with broad searches to discover relevant files, then narrow your focus to examine implementation details. This two-phase approach prevents information overload while ensuring you find all related code. Begin with keyword searches and file patterns, then once you've identified the key files, dive deeper with targeted queries to understand the specific implementation.
+Start by reading high-level files (README, package.json, config files) and surveying the directory structure to understand the project's architecture. Next, perform complete reads of key files to build a mental model of major components and their relationships. Once you've identified areas of interest, return to specific files using targeted reads with offsets to examine particular functions, classes, or sections in detail, tracing implementation patterns and dependencies.
 
 ## When to Use
 
-- You need to understand how an existing feature is implemented
-- You're looking for where specific functionality or APIs are defined
-- You want to modify code but first need to locate all related files
-- You're debugging an issue and need to trace through the implementation
-- You're onboarding to a new codebase and need to understand architecture patterns
+- When joining a new project or examining unfamiliar code for the first time
+- When investigating bugs or features in code you didn't write
+- When evaluating third-party libraries or dependencies to understand their internals
+- When onboarding to a large codebase and need to build contextual understanding
+- When preparing to make changes in an area of code you haven't worked with before
 
 ## Steps
 
-1. **Cast a wide net with keyword searches**
-   Search for function names, class names, or feature-related keywords across the entire codebase to identify potentially relevant files. Use broad patterns like searching for 'authentication' or 'payment' to discover all related code.
+1. **Follow the pattern described above**
+   Users exploring unfamiliar codebases follow a two-phase workflow: (1) **Systematic Exploration** - beginning with high-level documentation, file structure surveys, and initial complete file reads to b
 
-2. **Search by file patterns and structure**
-   Use glob patterns to find files by naming conventions (like *Auth*.ts or **/*Service.java) and examine exports or public APIs to understand what each module provides.
+## Edge Cases
 
-3. **Identify primary implementation files**
-   Review search results to determine which files contain the core implementation versus peripheral code. Look for main classes, entry points, or files with the most relevant matches.
+### When conditions differ
 
-4. **Examine specific implementation details**
-   Once you've located the key files, perform targeted searches for specific types, methods, or patterns within those files. Read relevant sections to understand data structures, algorithms, and dependencies.
+The contradicting evidence shows the user reading a **specific offset range (lines 57-97) of a file they've already read in full**. This contradicts the thesis of systematic top-down exploration because:
 
-5. **Trace connections and dependencies**
-   Follow imports, function calls, and type references to understand how components interact. Use precise file paths and line-limited reads to focus on the most relevant code sections.
+1. **Non-linear navigation**: Instead of progressively moving from overview → structure → details, the user is jumping back to re-examine a specific section of an already-visited file
+2. **Targeted re-inspection**: Using offset/limit parameters indicates they're zeroing in on particular lines of interest, not conducting a broad survey
+3. **Deep-dive iteration**: The context shows they previously read the entire `retriever.ts` file, and are now returning to scrutinize a narrow section (40 lines starting at line 57)
+
+This behavior suggests **investigative debugging or feature tracing** rather than systematic exploration - the user likely found something interesting or problematic and is now iterating on specific implementation details. (Resolution hint: These patterns represent different phases of the same workflow. Users often begin with systematic top-down exploration (README → structure → initial file reads), but transition to iterative deep-diving once they identify specific areas of interest. The contradiction resolves when viewed as: **Phase 1 (Exploration)** = thesis behavior, **Phase 2 (Investigation)** = contradicting behavior. The user likely completed their initial survey and is now in an active investigation phase, repeatedly examining specific code sections that relate to their current focus (possibly the memory retrieval system, given the file name and context about a "self-referential AI memory system").)

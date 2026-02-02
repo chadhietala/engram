@@ -273,6 +273,89 @@ Focus on the HIGH-LEVEL INTENT, not the mechanical tool usage. For example:
 }
 
 /**
+ * Structured tool operation for script generation
+ */
+interface ToolOperation {
+  tool: string;
+  params?: Record<string, unknown>;
+  description?: string;
+}
+
+/**
+ * Analyze tool operations to extract the generalizable pattern
+ */
+function analyzeToolPattern(operations: ToolOperation[]): {
+  workflow: string;
+  keyOperations: string[];
+  filePatterns: string[];
+  searchPatterns: string[];
+} {
+  const toolCounts: Record<string, number> = {};
+  const filePatterns = new Set<string>();
+  const searchPatterns = new Set<string>();
+  const workflow: string[] = [];
+
+  for (const op of operations) {
+    toolCounts[op.tool] = (toolCounts[op.tool] || 0) + 1;
+
+    // Extract generalizable patterns from specific paths/commands
+    if (op.params) {
+      // File patterns
+      if (typeof op.params.file_path === 'string') {
+        const path = op.params.file_path as string;
+        // Extract directory patterns: src/*, types/*, etc.
+        const dirMatch = path.match(/\/([a-z-]+)\//gi);
+        if (dirMatch) {
+          dirMatch.forEach(d => filePatterns.add(d.replace(/\//g, '')));
+        }
+        // Extract file type patterns
+        const extMatch = path.match(/\.(ts|tsx|js|jsx|json|md)$/);
+        if (extMatch) filePatterns.add(`*.${extMatch[1]}`);
+      }
+
+      // Glob patterns
+      if (typeof op.params.pattern === 'string') {
+        searchPatterns.add(op.params.pattern as string);
+      }
+
+      // Grep patterns
+      if (typeof op.params.pattern === 'string' && op.tool === 'Grep') {
+        searchPatterns.add(`search: ${op.params.pattern}`);
+      }
+
+      // Bash commands - extract the action, not specific paths
+      if (typeof op.params.command === 'string') {
+        const cmd = op.params.command as string;
+        const action = cmd.split(' ')[0] || '';
+        if (action && !workflow.includes(action)) workflow.push(action);
+      }
+    }
+  }
+
+  // Determine workflow phases
+  const keyOperations: string[] = [];
+  if (toolCounts['Glob'] || toolCounts['Grep']) {
+    keyOperations.push('Discovery: Find relevant files/patterns');
+  }
+  if (toolCounts['Read']) {
+    keyOperations.push(`Analysis: Read and understand ${toolCounts['Read']} file(s)`);
+  }
+  if (toolCounts['Bash']) {
+    keyOperations.push('Execution: Run commands');
+  }
+  if (toolCounts['Edit'] || toolCounts['Write']) {
+    keyOperations.push('Modification: Update files');
+  }
+
+  return {
+    workflow: keyOperations.join(' → '),
+    keyOperations,
+    filePatterns: [...filePatterns],
+    searchPatterns: [...searchPatterns],
+  };
+}
+
+/**
  * Generate an intelligent, executable script for a skill
  * This creates a real workflow, not a dumb replay of tool calls
  */
@@ -280,13 +363,44 @@ export async function generateSkillScript(
   skillName: string,
   goalDescription: string,
   synthesisContent: string,
-  exampleToolUsage: Array<{ tool: string; description: string }>
+  exampleToolUsage: Array<{ tool: string; description?: string; parameters?: Record<string, unknown> }>
 ): Promise<SkillScript> {
-  const toolExamples = exampleToolUsage.slice(0, 5).map(t =>
-    `- ${t.tool}: ${t.description}`
-  ).join('\n');
+  // Convert to structured operations
+  const operations: ToolOperation[] = exampleToolUsage.map(t => ({
+    tool: t.tool,
+    params: t.parameters,
+    description: t.description,
+  }));
 
-  const prompt = `Generate an intelligent Bun/TypeScript script that implements a reusable skill.
+  // Analyze to extract generalizable pattern
+  const pattern = analyzeToolPattern(operations);
+
+  // Build structured tool summary - show what was done, not exact paths
+  const toolSummary = operations.length > 0
+    ? operations.slice(0, 15).map(op => {
+        if (op.tool === 'Read' && op.params?.file_path) {
+          const path = String(op.params.file_path);
+          const fileName = path.split('/').pop() || path;
+          const dir = path.split('/').slice(-2, -1)[0] || '';
+          return `Read: ${dir}/${fileName}`;
+        }
+        if (op.tool === 'Glob' && op.params?.pattern) {
+          return `Glob: ${op.params.pattern}`;
+        }
+        if (op.tool === 'Grep' && op.params?.pattern) {
+          return `Grep: "${op.params.pattern}"`;
+        }
+        if (op.tool === 'Bash' && op.params?.command) {
+          const cmd = String(op.params.command);
+          return `Bash: ${cmd.length > 50 ? cmd.substring(0, 50) + '...' : cmd}`;
+        }
+        return `${op.tool}`;
+      }).join('\n')
+    : '(No specific tool data available - infer from the learned pattern description)';
+
+  // Build prompt with or without tool data
+  const hasToolData = operations.length > 0;
+  const prompt = `Generate a USEFUL Bun/TypeScript CLI tool that implements this learned skill.
 
 <skill_name>${skillName}</skill_name>
 
@@ -295,25 +409,72 @@ export async function generateSkillScript(
 <learned_pattern>
 ${synthesisContent}
 </learned_pattern>
+${hasToolData ? `
+<tool_sequence>
+${toolSummary}
+</tool_sequence>
 
-<example_tool_usage>
-${toolExamples}
-</example_tool_usage>
+<abstracted_workflow>
+${pattern.workflow}
+</abstracted_workflow>
 
-Create a complete, executable script that:
-1. Takes a target directory as the first argument (defaults to current directory)
-2. Implements the skill's GOAL intelligently - don't just replay exact commands
-3. Uses Bun APIs: Bun.file(), Bun.Glob, Bun.$\`command\`, etc.
-4. Has proper error handling and helpful output
-5. Is parameterized and works on any codebase, not just the one it learned from
+<file_patterns_observed>
+${pattern.filePatterns.join(', ') || 'Various source files'}
+</file_patterns_observed>` : `
+<note>
+No specific tool usage data is available. Generate a script based ONLY on the skill name,
+goal description, and learned pattern. The script should implement the pattern described
+using reasonable Bun APIs (Bun.Glob, Bun.file, etc.) for a generic TypeScript/JavaScript codebase.
+</note>`}
 
-The script should be a WORKFLOW that accomplishes the goal, not a sequence of hardcoded file reads.
+<search_patterns_observed>
+${pattern.searchPatterns.join(', ') || 'None specific'}
+</search_patterns_observed>
 
-For example, if the goal is "explore-codebase":
-- DON'T just read specific files like "src/index.ts"
-- DO dynamically discover structure, find entry points, analyze dependencies
+CRITICAL: Generate a script that provides REAL VALUE. The script must:
 
-Return a complete script starting with #!/usr/bin/env bun`;
+1. **Be genuinely useful** - Not just print instructions, but DO something:
+   - If the skill involves exploration: scan files, analyze patterns, produce a report
+   - If the skill involves modification: make actual changes with confirmation
+   - If the skill involves search: find and display results
+
+2. **Generalize from the examples** - Don't hardcode specific paths:
+   - If examples read "src/dialectic/thesis.ts", the script should discover files matching patterns
+   - If examples searched for "function xyz", the script should search for configurable patterns
+
+3. **Produce actionable output** - Console output should be:
+   - Structured (sections, lists, counts)
+   - Informative (what was found, what it means)
+   - Actionable (next steps, suggestions)
+
+Example of a BAD script (just prints instructions):
+\`\`\`
+console.log("To explore a codebase:");
+console.log("1. Read the README");
+console.log("2. Look at the entry point");
+\`\`\`
+
+Example of a GOOD script (actually does something):
+\`\`\`
+const files = await glob.scan({ cwd: targetDir, pattern: "**/*.ts" });
+const entryPoints = files.filter(f => f.includes("index.") || f.includes("main."));
+console.log(\`Found \${entryPoints.length} entry points:\`);
+for (const entry of entryPoints) {
+  const content = await Bun.file(entry).text();
+  const exports = content.match(/export .+/g)?.length || 0;
+  console.log(\`  \${entry}: \${exports} exports\`);
+}
+\`\`\`
+
+Requirements:
+- Use Bun APIs: Bun.file(), Bun.Glob, Bun.$\`cmd\`
+- Accept target directory as first argument (default to cwd)
+- Include --help flag support
+- Use parseArgs from "util" for argument parsing
+- Have proper error handling
+- Make the output visually clear with emoji/formatting
+
+Start with: #!/usr/bin/env bun`;
 
   const result = await queryWithSchema(prompt, SkillScriptSchema);
   return result;
