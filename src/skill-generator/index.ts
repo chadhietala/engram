@@ -44,7 +44,7 @@ import type {
 import type { Synthesis } from '../types/dialectic.ts';
 import type { Memory } from '../types/memory.ts';
 
-const SKILLS_DIR = './skills';
+const SKILLS_DIR = './.claude/skills';
 
 export class SkillGenerator {
   private db: Database;

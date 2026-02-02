@@ -4,8 +4,10 @@
 
 import type { Database } from 'bun:sqlite';
 import { queryMemories, updateMemory } from '../db/queries/memories.ts';
+import { queryPatterns, updatePattern } from '../db/queries/patterns.ts';
 import { findRelatedMemories } from '../memory/processing/retriever.ts';
 import type { Memory, MemoryStage } from '../types/memory.ts';
+import type { Pattern } from '../types/dialectic.ts';
 
 import {
   meetsConceptualRequirements,
@@ -208,7 +210,60 @@ export class StagePipeline {
     const enriched = await processConceptualBatch(this.db, 20);
     result.enriched = enriched.length;
 
+    // Advance pattern stages based on associated memories
+    await this.advancePatternStages();
+
     return result;
+  }
+
+  /**
+   * Advance pattern stages based on their associated memories and confidence
+   * Patterns only advance forward, never backward.
+   *
+   * Stage advancement criteria:
+   * - conceptual → semantic: 3+ memories, confidence >= 0.5
+   * - semantic → syntactic: 5+ memories, confidence >= 0.7
+   */
+  async advancePatternStages(): Promise<{ advanced: number; patterns: string[] }> {
+    const patterns = queryPatterns(this.db);
+    const advanced: string[] = [];
+
+    const stageOrder = { conceptual: 0, semantic: 1, syntactic: 2 };
+
+    for (const pattern of patterns) {
+      const memoryCount = pattern.memoryIds.length;
+      const targetStage = this.determinePatternStage(pattern, memoryCount);
+
+      // Only advance, never downgrade
+      if (stageOrder[targetStage] > stageOrder[pattern.stage]) {
+        updatePattern(this.db, pattern.id, { stage: targetStage });
+        advanced.push(`${pattern.name}: ${pattern.stage} → ${targetStage}`);
+        console.error(`[Stages] Pattern ${pattern.name} advanced: ${pattern.stage} → ${targetStage}`);
+      }
+    }
+
+    return { advanced: advanced.length, patterns: advanced };
+  }
+
+  /**
+   * Determine what stage a pattern should be at based on its metrics
+   */
+  private determinePatternStage(
+    pattern: Pattern,
+    memoryCount: number
+  ): 'conceptual' | 'semantic' | 'syntactic' {
+    // Syntactic: mature pattern with high confidence and many examples
+    if (memoryCount >= 5 && pattern.confidence >= 0.7) {
+      return 'syntactic';
+    }
+
+    // Semantic: developing pattern with moderate confidence
+    if (memoryCount >= 3 && pattern.confidence >= 0.5) {
+      return 'semantic';
+    }
+
+    // Conceptual: early-stage pattern
+    return 'conceptual';
   }
 
   /**

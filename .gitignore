@@ -38,3 +38,6 @@ data/
 *.db
 *.db-shm
 *.db-wal
+
+# Old skills location (now .claude/skills)
+skills/
