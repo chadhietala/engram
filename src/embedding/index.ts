@@ -91,24 +91,25 @@ export async function embedBatch(
     uncachedIndices.push(i);
   }
 
-  // Compute embeddings for uncached texts
+  // Compute embeddings for uncached texts in parallel
   if (uncachedTexts.length > 0) {
     const pipe = await getEmbeddingPipeline();
 
-    for (let i = 0; i < uncachedTexts.length; i++) {
-      const text = uncachedTexts[i]!;
-      const output = await pipe(text, {
-        pooling: 'mean',
-        normalize: true,
-      });
+    const embeddings = await Promise.all(
+      uncachedTexts.map(text =>
+        pipe(text, { pooling: 'mean', normalize: true })
+      )
+    );
 
+    for (let i = 0; i < embeddings.length; i++) {
+      const output = embeddings[i]!;
       const embedding = new Float32Array(output.data as ArrayLike<number>);
       const originalIndex = uncachedIndices[i]!;
       results[originalIndex] = embedding;
 
       // Cache
       if (db) {
-        cacheEmbedding(db, text, embedding);
+        cacheEmbedding(db, uncachedTexts[i]!, embedding);
       }
     }
   }

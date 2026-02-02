@@ -177,31 +177,39 @@ export class StagePipeline {
       errors: [],
     };
 
-    // Process conceptual → semantic transitions
+    // Process conceptual → semantic transitions in parallel
     const conceptualReady = getConceptualReadyForTransition(this.db);
-    for (const memory of conceptualReady) {
-      try {
-        const transition = await this.transitionToSemantic(memory);
+    const conceptualResults = await Promise.allSettled(
+      conceptualReady.map(memory => this.transitionToSemantic(memory))
+    );
+
+    for (const settledResult of conceptualResults) {
+      if (settledResult.status === 'fulfilled') {
+        const transition = settledResult.value;
         if (transition) {
           result.transitioned.push(transition);
         }
         result.processed++;
-      } catch (error) {
-        result.errors.push(`Failed to transition ${memory.id}: ${error}`);
+      } else {
+        result.errors.push(`Failed to transition: ${settledResult.reason}`);
       }
     }
 
-    // Process semantic → syntactic transitions
+    // Process semantic → syntactic transitions in parallel
     const semanticReady = getSemanticReadyForTransition(this.db);
-    for (const memory of semanticReady) {
-      try {
-        const transition = await this.transitionToSyntactic(memory);
+    const semanticResults = await Promise.allSettled(
+      semanticReady.map(memory => this.transitionToSyntactic(memory))
+    );
+
+    for (const settledResult of semanticResults) {
+      if (settledResult.status === 'fulfilled') {
+        const transition = settledResult.value;
         if (transition) {
           result.transitioned.push(transition);
         }
         result.processed++;
-      } catch (error) {
-        result.errors.push(`Failed to transition ${memory.id}: ${error}`);
+      } else {
+        result.errors.push(`Failed to transition: ${settledResult.reason}`);
       }
     }
 

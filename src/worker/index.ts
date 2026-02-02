@@ -5,7 +5,7 @@
  */
 
 import { initializeDatabase } from '../db/index.ts';
-import { embed } from '../embedding/index.ts';
+import { embed, embedBatch } from '../embedding/index.ts';
 import { createMemory, updateMemory, getMemory, queryMemories } from '../db/queries/memories.ts';
 import { DialecticEngine } from '../dialectic/index.ts';
 import { StagePipeline } from '../stages/index.ts';
@@ -14,6 +14,7 @@ import { analyzePattern, analyzeContradiction, analyzeSynthesis } from '../llm/i
 import type { Memory } from '../types/memory.ts';
 
 const PORT = 37778;
+const CONCURRENCY_LIMIT = 4;
 
 interface QueuedTask {
   id: string;
@@ -40,47 +41,6 @@ const dialecticEngine = new DialecticEngine(db);
 const stagePipeline = new StagePipeline(db);
 const skillGenerator = new SkillGenerator(db);
 
-/**
- * Process queued tasks
- */
-async function processQueue(): Promise<void> {
-  if (isProcessing || queue.length === 0) return;
-
-  isProcessing = true;
-
-  while (queue.length > 0) {
-    const task = queue.shift();
-    if (!task) continue;
-
-    try {
-      switch (task.type) {
-        case 'memory':
-          await processMemoryTask(task.data as MemoryTaskData);
-          break;
-        case 'dialectic':
-          await processDialecticTask(task.data as { memoryId: string });
-          break;
-        case 'stages':
-          await processStagesTask();
-          break;
-        case 'skills':
-          await processSkillsTask();
-          break;
-        case 'llm-analysis':
-          await processLLMAnalysisTask(task.data as { memoryIds: string[] });
-          break;
-      }
-      stats.processed++;
-      stats.lastProcessed = Date.now();
-    } catch (error) {
-      console.error(`[Worker] Error processing task ${task.type}:`, error);
-      stats.errors++;
-    }
-  }
-
-  isProcessing = false;
-}
-
 interface MemoryTaskData {
   memoryId: string;
   content: string;
@@ -89,7 +49,145 @@ interface MemoryTaskData {
 }
 
 /**
+ * Process a single task
+ */
+async function processTask(task: QueuedTask): Promise<void> {
+  switch (task.type) {
+    case 'memory':
+      await processMemoryTask(task.data as MemoryTaskData);
+      break;
+    case 'dialectic':
+      await processDialecticTask(task.data as { memoryId: string });
+      break;
+    case 'stages':
+      await processStagesTask();
+      break;
+    case 'skills':
+      await processSkillsTask();
+      break;
+    case 'llm-analysis':
+      await processLLMAnalysisTask(task.data as { memoryIds: string[] });
+      break;
+  }
+}
+
+/**
+ * Process memory tasks in batch using embedBatch for efficiency
+ */
+async function processMemoryTasksBatch(tasks: QueuedTask[]): Promise<void> {
+  const memoryTasks = tasks
+    .filter(t => t.type === 'memory')
+    .map(t => ({ task: t, data: t.data as MemoryTaskData }));
+
+  if (memoryTasks.length === 0) return;
+
+  // Separate tasks that need embedding from those that don't
+  const needsEmbedding = memoryTasks.filter(t => t.data.generateEmbedding);
+  const noEmbedding = memoryTasks.filter(t => !t.data.generateEmbedding);
+
+  // Batch embed all texts that need embedding
+  if (needsEmbedding.length > 0) {
+    const contents = needsEmbedding.map(t => t.data.content);
+    const embeddings = await embedBatch(contents, db);
+
+    // Apply embeddings to each memory
+    for (let i = 0; i < needsEmbedding.length; i++) {
+      const { data } = needsEmbedding[i]!;
+      const embedding = embeddings[i];
+      if (embedding) {
+        const memory = getMemory(db, data.memoryId);
+        if (memory) {
+          updateMemory(db, data.memoryId, {}, embedding);
+          console.error(`[Worker] Embedded memory ${data.memoryId.slice(0, 8)}...`);
+        }
+      }
+    }
+  }
+
+  // Process dialectic for all tasks that need it (in parallel)
+  const needsDialectic = memoryTasks.filter(t => t.data.runDialectic);
+  await Promise.allSettled(
+    needsDialectic.map(async ({ data }) => {
+      const memory = getMemory(db, data.memoryId);
+      if (memory) {
+        await dialecticEngine.processMemory(memory);
+      }
+    })
+  );
+
+  // Queue LLM analysis for sessions with enough memories
+  const processedIds = new Set<string>();
+  for (const { data } of [...needsEmbedding, ...noEmbedding]) {
+    if (processedIds.has(data.memoryId)) continue;
+    processedIds.add(data.memoryId);
+
+    const memory = getMemory(db, data.memoryId);
+    if (memory) {
+      const sessionMemories = queryMemories(db, {
+        sessionId: memory.metadata.sessionId,
+        limit: 10,
+      });
+      if (sessionMemories.length >= 5 && sessionMemories.length % 5 === 0) {
+        enqueue({
+          type: 'llm-analysis',
+          data: { memoryIds: sessionMemories.map(m => m.id) },
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Process queued tasks with concurrency
+ */
+async function processQueue(): Promise<void> {
+  if (isProcessing || queue.length === 0) return;
+
+  isProcessing = true;
+
+  while (queue.length > 0) {
+    // Take a batch of tasks up to the concurrency limit
+    const batch = queue.splice(0, CONCURRENCY_LIMIT);
+
+    // Separate memory tasks for batch processing
+    const memoryTasks = batch.filter(t => t.type === 'memory');
+    const otherTasks = batch.filter(t => t.type !== 'memory');
+
+    // Process memory tasks as a batch (uses embedBatch internally)
+    if (memoryTasks.length > 0) {
+      try {
+        await processMemoryTasksBatch(memoryTasks);
+        stats.processed += memoryTasks.length;
+        stats.lastProcessed = Date.now();
+      } catch (error) {
+        console.error(`[Worker] Error processing memory batch:`, error);
+        stats.errors += memoryTasks.length;
+      }
+    }
+
+    // Process other tasks concurrently
+    const results = await Promise.allSettled(
+      otherTasks.map(task => processTask(task))
+    );
+
+    // Update stats based on results
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        stats.processed++;
+        stats.lastProcessed = Date.now();
+      } else {
+        console.error(`[Worker] Error processing task:`, result.reason);
+        stats.errors++;
+      }
+    }
+  }
+
+  isProcessing = false;
+}
+
+/**
  * Process memory task - generate embedding and associations
+ * (Used as fallback when processTask is called directly)
  */
 async function processMemoryTask(data: MemoryTaskData): Promise<void> {
   const { memoryId, content, generateEmbedding, runDialectic } = data;
