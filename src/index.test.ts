@@ -16,6 +16,7 @@ import { SkillGenerator } from './skill-generator/index.ts';
 import {
   validateSkillName,
   generateValidSkillName,
+  extractNameFromDescription,
 } from './skill-generator/validator.ts';
 import { cosineSimilarity } from './embedding/index.ts';
 
@@ -174,6 +175,40 @@ describe('Skill Validator', () => {
     expect(generateValidSkillName('123start')).toBe('skill-123start');
     expect(generateValidSkillName('UPPERCASE')).toBe('uppercase');
     expect(generateValidSkillName('special!@#chars')).toBe('specialchars');
+  });
+
+  test('extracts name from description - verb + noun patterns', () => {
+    expect(extractNameFromDescription('This skill explores the codebase structure'))
+      .toBe('explore-codebase');
+    expect(extractNameFromDescription('Commit changes to git'))
+      .toBe('commit-changes');
+    expect(extractNameFromDescription('Search for files in the repository'))
+      .toBe('search-files');
+    expect(extractNameFromDescription('Run tests on the project'))
+      .toBe('run-tests');
+    expect(extractNameFromDescription('Debug the errors in the code'))
+      .toBe('debug-errors');
+  });
+
+  test('extracts name from description - various verb forms', () => {
+    expect(extractNameFromDescription('Explores codebase patterns'))
+      .toBe('explore-codebase');
+    expect(extractNameFromDescription('Building the project'))
+      .toBe('build-project');
+    expect(extractNameFromDescription('Fetches API data'))
+      .toBe('fetch-api');
+  });
+
+  test('extracts name from description - returns null for no match', () => {
+    expect(extractNameFromDescription('')).toBeNull();
+    expect(extractNameFromDescription('Just some random text')).toBeNull();
+  });
+
+  test('extracts name from description - finds noun without direct verb', () => {
+    expect(extractNameFromDescription('This skill helps with the codebase'))
+      .toBe('explore-codebase');
+    expect(extractNameFromDescription('Helps manage the repository'))
+      .toBe('explore-repository');
   });
 });
 

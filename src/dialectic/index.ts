@@ -45,6 +45,309 @@ import type {
   DialecticCycle,
 } from '../types/dialectic.ts';
 import type { Memory } from '../types/memory.ts';
+import { extractUserGoal } from '../llm/index.ts';
+
+/**
+ * Common action verbs to detect in memory content
+ */
+const ACTION_VERBS = [
+  'commit', 'push', 'pull', 'merge', 'checkout', 'branch', 'rebase', 'clone',
+  'build', 'compile', 'run', 'test', 'deploy', 'install', 'update', 'upgrade',
+  'read', 'write', 'edit', 'create', 'delete', 'search', 'find', 'explore',
+  'fetch', 'request', 'send', 'upload', 'download',
+  'debug', 'fix', 'refactor', 'review', 'analyze', 'validate', 'lint',
+  'start', 'stop', 'restart', 'configure', 'setup', 'init',
+];
+
+/**
+ * Map file extensions to human-readable names
+ */
+function extensionToName(ext: string): string {
+  const mapping: Record<string, string> = {
+    ts: 'typescript',
+    tsx: 'typescript-react',
+    js: 'javascript',
+    jsx: 'javascript-react',
+    py: 'python',
+    rb: 'ruby',
+    go: 'go',
+    rs: 'rust',
+    java: 'java',
+    kt: 'kotlin',
+    swift: 'swift',
+    c: 'c',
+    cpp: 'cpp',
+    h: 'c-header',
+    hpp: 'cpp-header',
+    cs: 'csharp',
+    php: 'php',
+    sh: 'shell',
+    bash: 'bash',
+    zsh: 'zsh',
+    md: 'markdown',
+    json: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+    xml: 'xml',
+    html: 'html',
+    css: 'css',
+    scss: 'scss',
+    sql: 'sql',
+  };
+  return mapping[ext.toLowerCase()] || ext.toLowerCase();
+}
+
+/**
+ * Get the most frequent item in an array
+ */
+function getMostFrequent(arr: string[]): string | null {
+  if (arr.length === 0) return null;
+
+  const counts = new Map<string, number>();
+  for (const item of arr) {
+    counts.set(item, (counts.get(item) || 0) + 1);
+  }
+
+  let maxCount = 0;
+  let mostFrequent: string | null = null;
+  for (const [item, count] of counts) {
+    if (count > maxCount) {
+      maxCount = count;
+      mostFrequent = item;
+    }
+  }
+
+  return mostFrequent;
+}
+
+/**
+ * Extract action verbs from memory content and tool inputs
+ */
+function extractActionFromContent(memories: Memory[]): string | null {
+  const foundActions: string[] = [];
+
+  for (const memory of memories) {
+    const content = memory.content.toLowerCase();
+
+    // Check content for action verbs
+    for (const verb of ACTION_VERBS) {
+      // Look for verb as a whole word
+      const regex = new RegExp(`\\b${verb}(s|ed|ing)?\\b`, 'i');
+      if (regex.test(content)) {
+        foundActions.push(verb);
+      }
+    }
+
+    // Also check tool input for commands (especially Bash commands)
+    const toolInput = memory.metadata.toolInput;
+    if (toolInput && typeof toolInput === 'object') {
+      const command = (toolInput as Record<string, unknown>).command;
+      if (typeof command === 'string') {
+        const firstWord = command.trim().split(/\s+/)[0]?.toLowerCase();
+        if (firstWord && ACTION_VERBS.includes(firstWord)) {
+          foundActions.push(firstWord);
+        }
+      }
+    }
+  }
+
+  return getMostFrequent(foundActions);
+}
+
+/**
+ * Generate a semantic pattern name from memories
+ * Priority: command_name > domain > file_extension > tool names
+ */
+function generateSemanticPatternName(memories: Memory[]): string {
+  const commandNames: string[] = [];
+  const domains: string[] = [];
+  const fileExtensions: string[] = [];
+  const toolNames: string[] = [];
+
+  for (const memory of memories) {
+    // Collect tool names
+    if (memory.metadata.toolName) {
+      toolNames.push(memory.metadata.toolName.toLowerCase());
+    }
+
+    // Extract semantic keys
+    for (const sk of memory.metadata.semanticKeys || []) {
+      switch (sk.key) {
+        case 'command_name':
+        case 'command':
+          commandNames.push(sk.value.toLowerCase());
+          break;
+        case 'domain':
+          domains.push(sk.value.toLowerCase().replace(/\./g, '-'));
+          break;
+        case 'file_extension':
+        case 'extension':
+          fileExtensions.push(sk.value.toLowerCase().replace(/^\./, ''));
+          break;
+      }
+    }
+
+    // Also try to extract from tool inputs
+    const toolInput = memory.metadata.toolInput;
+    if (toolInput && typeof toolInput === 'object') {
+      const input = toolInput as Record<string, unknown>;
+
+      // Extract command from Bash
+      if (typeof input.command === 'string') {
+        const firstWord = input.command.trim().split(/\s+/)[0]?.toLowerCase();
+        if (firstWord) {
+          commandNames.push(firstWord);
+        }
+      }
+
+      // Extract domain from URLs
+      if (typeof input.url === 'string') {
+        try {
+          const url = new URL(input.url);
+          domains.push(url.hostname.replace(/\./g, '-'));
+        } catch {
+          // Invalid URL, ignore
+        }
+      }
+
+      // Extract file extension from file paths
+      if (typeof input.file_path === 'string') {
+        const match = input.file_path.match(/\.([a-z0-9]+)$/i);
+        if (match) {
+          fileExtensions.push(match[1].toLowerCase());
+        }
+      }
+    }
+  }
+
+  // Try to extract an action from memory content
+  const action = extractActionFromContent(memories);
+
+  // Priority 1: Command name (git, npm, docker, etc.)
+  const mostFrequentCommand = getMostFrequent(commandNames);
+  if (mostFrequentCommand) {
+    const suffix = action && action !== mostFrequentCommand ? `-${action}` : '-workflow';
+    return `${mostFrequentCommand}${suffix}`;
+  }
+
+  // Priority 2: Domain (github, stackoverflow, etc.)
+  const mostFrequentDomain = getMostFrequent(domains);
+  if (mostFrequentDomain) {
+    const simplifiedDomain = mostFrequentDomain.replace(/-com$|-org$|-io$/, '');
+    const suffix = action ? `-${action}` : '-operations';
+    return `${simplifiedDomain}${suffix}`;
+  }
+
+  // Priority 3: File extension (typescript, python, etc.)
+  const mostFrequentExt = getMostFrequent(fileExtensions);
+  if (mostFrequentExt) {
+    const extName = extensionToName(mostFrequentExt);
+    const suffix = action ? `-${action}` : '-exploration';
+    return `${extName}${suffix}`;
+  }
+
+  // Priority 4: Tool names (fallback)
+  const uniqueTools = [...new Set(toolNames)];
+  if (uniqueTools.length > 0) {
+    const toolPart = uniqueTools.slice(0, 2).join('-');
+    const suffix = action ? `-${action}` : '-pattern';
+    return `${toolPart}${suffix}`;
+  }
+
+  // Ultimate fallback
+  return action ? `${action}-pattern` : `pattern-${Date.now()}`;
+}
+
+/**
+ * Find user prompts associated with tool memories
+ * Looks for "User prompt:" memories in the same session or temporally close
+ */
+async function findAssociatedUserPrompts(
+  db: Database,
+  toolMemories: Memory[]
+): Promise<string[]> {
+  if (toolMemories.length === 0) return [];
+
+  // Get unique session IDs from tool memories
+  const sessionIds = [...new Set(toolMemories.map(m => m.metadata.sessionId))];
+
+  // Get time range (with some buffer)
+  const timestamps = toolMemories.map(m => m.createdAt);
+  const minTime = Math.min(...timestamps) - 60000; // 1 minute before
+  const maxTime = Math.max(...timestamps) + 60000; // 1 minute after
+
+  // Import queryMemories to find user prompts
+  const { queryMemories } = await import('../db/queries/memories.ts');
+
+  const userPrompts: string[] = [];
+
+  for (const sessionId of sessionIds) {
+    const sessionMemories = queryMemories(db, { sessionId });
+
+    for (const mem of sessionMemories) {
+      if (
+        mem.content.startsWith('User prompt:') &&
+        mem.createdAt >= minTime &&
+        mem.createdAt <= maxTime &&
+        !mem.content.includes('<task-notification>')
+      ) {
+        // Extract the actual prompt text
+        const promptText = mem.content.replace('User prompt:', '').trim();
+        if (promptText.length > 5 && promptText.length < 500) {
+          userPrompts.push(promptText);
+        }
+      }
+    }
+  }
+
+  // Deduplicate
+  return [...new Set(userPrompts)];
+}
+
+/**
+ * Generate a goal-based pattern name using LLM analysis of user prompts
+ */
+async function generateGoalBasedPatternName(
+  db: Database,
+  memories: Memory[]
+): Promise<{ name: string; description: string }> {
+  // Find user prompts associated with these memories
+  const userPrompts = await findAssociatedUserPrompts(db, memories);
+
+  if (userPrompts.length === 0) {
+    // Fall back to semantic pattern naming if no user prompts found
+    const name = generateSemanticPatternName(memories);
+    const toolNames = [...new Set(memories.map(m => m.metadata.toolName).filter(Boolean))];
+    const description = `Pattern detected from ${memories.length} similar operations using ${toolNames.join(', ') || 'various tools'}`;
+    return { name, description };
+  }
+
+  try {
+    // Use LLM to extract the high-level goal
+    const toolMemories = memories.filter(m => m.metadata.toolName);
+    const goal = await extractUserGoal(userPrompts, toolMemories);
+
+    // Ensure the goal name is valid (lowercase, hyphenated)
+    const name = goal.goal
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    return {
+      name: name || generateSemanticPatternName(memories),
+      description: goal.goalDescription,
+    };
+  } catch (error) {
+    console.error('[Engram] Failed to extract user goal, falling back to semantic naming:', error);
+    // Fall back to semantic pattern naming
+    const name = generateSemanticPatternName(memories);
+    const toolNames = [...new Set(memories.map(m => m.metadata.toolName).filter(Boolean))];
+    const description = `Pattern detected from ${memories.length} similar operations using ${toolNames.join(', ') || 'various tools'}`;
+    return { name, description };
+  }
+}
 
 /**
  * Dialectic engine configuration
@@ -235,18 +538,8 @@ export class DialecticEngine {
       return null;
     }
 
-    // Generate pattern name from common characteristics
-    const toolNames = [...new Set(
-      similarMemories
-        .map(m => m.metadata.toolName)
-        .filter(Boolean)
-    )];
-
-    const name = toolNames.length > 0
-      ? `${toolNames.join('-')}-pattern`
-      : `pattern-${Date.now()}`;
-
-    const description = `Pattern detected from ${similarMemories.length} similar operations using ${toolNames.join(', ') || 'various tools'}`;
+    // Generate goal-based pattern name from user prompts + tool usage
+    const { name, description } = await generateGoalBasedPatternName(this.db, similarMemories);
 
     // Create the pattern
     const { pattern, thesis } = await this.createPatternFromMemories(

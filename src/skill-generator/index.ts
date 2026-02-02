@@ -21,6 +21,7 @@ import {
   validateSkill,
   validateSkillName,
   generateValidSkillName,
+  extractNameFromDescription,
 } from './validator.ts';
 import {
   generateSkillMarkdown,
@@ -30,7 +31,8 @@ import {
   generateExecutableScript,
   generateReplayScript,
 } from './script-generator.ts';
-import { generateSkillContent } from '../llm/index.ts';
+import { generateSkillContent, extractUserGoal, generateSkillScript } from '../llm/index.ts';
+import { queryMemories } from '../db/queries/memories.ts';
 import { generateProcedure } from '../stages/syntactic.ts';
 import type {
   Skill,
@@ -41,6 +43,82 @@ import type {
 import type { Memory } from '../types/memory.ts';
 
 const SKILLS_DIR = './.claude/skills';
+
+/**
+ * Find an existing skill that matches the goal (for evolution instead of duplication)
+ * Returns the skill if found, null otherwise
+ */
+function findExistingSkillByGoal(db: Database, goalName: string): Skill | null {
+  // First try exact match
+  const exactMatch = getSkillByName(db, goalName);
+  if (exactMatch) return exactMatch;
+
+  // Try to find a skill with a similar base name (without version suffix)
+  const baseName = goalName.replace(/-\d+$/, '');
+  const allSkills = querySkills(db, {});
+
+  for (const skill of allSkills) {
+    const skillBaseName = skill.name.replace(/-\d+$/, '');
+    if (skillBaseName === baseName) {
+      return skill;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Increment version number (1.0 -> 1.1, 1.9 -> 2.0)
+ */
+function incrementVersion(version: string): string {
+  const parts = version.split('.');
+  const major = parseInt(parts[0] || '1', 10);
+  const minor = parseInt(parts[1] || '0', 10);
+
+  if (minor >= 9) {
+    return `${major + 1}.0`;
+  }
+  return `${major}.${minor + 1}`;
+}
+
+/**
+ * Find user prompts associated with memories based on session and temporal proximity
+ */
+function findAssociatedUserPrompts(db: Database, memories: Memory[]): string[] {
+  if (memories.length === 0) return [];
+
+  // Get unique session IDs from memories
+  const sessionIds = [...new Set(memories.map(m => m.metadata.sessionId))];
+
+  // Get time range (with some buffer)
+  const timestamps = memories.map(m => m.createdAt);
+  const minTime = Math.min(...timestamps) - 60000; // 1 minute before
+  const maxTime = Math.max(...timestamps) + 60000; // 1 minute after
+
+  const userPrompts: string[] = [];
+
+  for (const sessionId of sessionIds) {
+    const sessionMemories = queryMemories(db, { sessionId });
+
+    for (const mem of sessionMemories) {
+      if (
+        mem.content.startsWith('User prompt:') &&
+        mem.createdAt >= minTime &&
+        mem.createdAt <= maxTime &&
+        !mem.content.includes('<task-notification>')
+      ) {
+        // Extract the actual prompt text
+        const promptText = mem.content.replace('User prompt:', '').trim();
+        if (promptText.length > 5 && promptText.length < 500) {
+          userPrompts.push(promptText);
+        }
+      }
+    }
+  }
+
+  // Deduplicate
+  return [...new Set(userPrompts)];
+}
 
 /**
  * Fetch memories by their IDs, filtering out nulls
@@ -99,9 +177,24 @@ export class SkillGenerator {
     // Get exemplar memories
     const exemplarMemories = fetchMemoriesByIds(this.db, synthesis.exemplarMemoryIds);
 
-    // Generate LLM-powered skill content (required - no fallback)
+    // Try to extract user goal from associated prompts FIRST
+    const userPrompts = findAssociatedUserPrompts(this.db, exemplarMemories);
+    let userGoal: { goal: string; goalDescription: string } | undefined;
+
+    if (userPrompts.length > 0) {
+      try {
+        console.error(`[SkillGenerator] Extracting goal from ${userPrompts.length} user prompts...`);
+        const extractedGoal = await extractUserGoal(userPrompts, exemplarMemories);
+        userGoal = { goal: extractedGoal.goal, goalDescription: extractedGoal.goalDescription };
+        console.error(`[SkillGenerator] Extracted goal: ${userGoal.goal} - ${userGoal.goalDescription}`);
+      } catch (error) {
+        console.error(`[SkillGenerator] Failed to extract goal:`, error);
+      }
+    }
+
+    // Generate LLM-powered skill content (pass user goal for context)
     console.error(`[SkillGenerator] Generating LLM-powered skill content...`);
-    const llmContent = await generateSkillContent(synthesis, exemplarMemories);
+    const llmContent = await generateSkillContent(synthesis, exemplarMemories, userGoal);
 
     // Map LLM output to SkillInstructions
     const instructions: SkillInstructions = {
@@ -121,24 +214,57 @@ export class SkillGenerator {
     const llmDescription = llmContent.description;
     console.error(`[SkillGenerator] LLM content generated successfully`);
 
-    // Generate skill name
-    const baseName = generateValidSkillName(pattern.name);
-    let skillName = baseName;
-    let counter = 1;
-
-    // Ensure unique name
-    while (getSkillByName(this.db, skillName)) {
-      skillName = `${baseName}-${counter}`;
-      counter++;
+    // Generate skill name - prefer user goal, fall back to description extraction
+    let baseName: string;
+    if (userGoal) {
+      baseName = generateValidSkillName(userGoal.goal);
+      console.error(`[SkillGenerator] Goal-based name: ${baseName}`);
+    } else {
+      // Fall back to extracting from LLM description
+      const extractedName = extractNameFromDescription(llmDescription);
+      baseName = extractedName
+        ? generateValidSkillName(extractedName)
+        : generateValidSkillName(pattern.name);
     }
 
-    // Use LLM-generated description
-    const description = llmDescription;
+    // Check if a skill with this goal already exists - EVOLVE instead of duplicate
+    const existingSkill = findExistingSkillByGoal(this.db, baseName);
 
-    // Determine complexity
+    if (existingSkill) {
+      console.error(`[SkillGenerator] Found existing skill "${existingSkill.name}" - evolving instead of duplicating`);
+
+      // Merge instructions - add new whenToUse scenarios and edge cases
+      const mergedInstructions: SkillInstructions = {
+        overview: llmContent.instructions, // Use newer, potentially better overview
+        whenToUse: [...new Set([...existingSkill.instructions.whenToUse, ...llmContent.whenToUse])],
+        steps: existingSkill.instructions.steps, // Keep existing steps
+        examples: existingSkill.instructions.examples,
+        edgeCases: [
+          ...existingSkill.instructions.edgeCases,
+          ...antithesisContents.map((content) => ({
+            condition: 'When conditions differ',
+            handling: content,
+          })),
+        ],
+      };
+
+      // Update the existing skill with new version
+      const newVersion = incrementVersion(existingSkill.version);
+      const updatedSkill = updateSkill(this.db, existingSkill.id, {
+        description: llmDescription,
+        version: newVersion,
+        instructions: mergedInstructions,
+      });
+
+      console.error(`[SkillGenerator] Evolved skill to version ${newVersion}`);
+      return updatedSkill;
+    }
+
+    // No existing skill - create new one
+    const skillName = baseName;
+    const description = llmDescription;
     const complexity = determineComplexity(instructions);
 
-    // Create skill
     const input: SkillCreateInput = {
       name: skillName,
       description,
@@ -167,7 +293,11 @@ export class SkillGenerator {
   /**
    * Write skill to file (SKILL.md + script.ts)
    */
-  async writeSkillFile(skill: Skill, memories?: Memory[]): Promise<string> {
+  async writeSkillFile(
+    skill: Skill,
+    memories?: Memory[],
+    synthesisContent?: string
+  ): Promise<string> {
     const content = generateSkillMarkdown(skill);
     const dirPath = `${this.skillsDir}/${skill.name}`;
     const filePath = `${dirPath}/SKILL.md`;
@@ -179,16 +309,35 @@ export class SkillGenerator {
     // Write SKILL.md
     await Bun.write(filePath, content);
 
-    // Generate and write executable script
+    // Generate intelligent LLM-powered script
     if (memories && memories.length > 0) {
-      const procedure = generateProcedure(
-        memories,
-        skill.name,
-        skill.description
-      );
-      const script = generateExecutableScript(skill, procedure);
-      await Bun.write(scriptPath, script);
-      await Bun.spawn(['chmod', '+x', scriptPath]).exited;
+      console.error(`[SkillGenerator] Generating intelligent script via LLM...`);
+
+      // Prepare tool usage examples for LLM
+      const toolExamples = memories.slice(0, 10).map(m => ({
+        tool: m.metadata.toolName || 'unknown',
+        description: m.content.substring(0, 150),
+      }));
+
+      try {
+        const scriptResult = await generateSkillScript(
+          skill.name,
+          skill.description,
+          synthesisContent || skill.instructions.overview,
+          toolExamples
+        );
+
+        await Bun.write(scriptPath, scriptResult.script);
+        await Bun.spawn(['chmod', '+x', scriptPath]).exited;
+        console.error(`[SkillGenerator] Generated intelligent script: ${scriptResult.explanation}`);
+      } catch (error) {
+        console.error(`[SkillGenerator] Failed to generate LLM script, falling back to basic:`, error);
+        // Fall back to basic script generation
+        const procedure = generateProcedure(memories, skill.name, skill.description);
+        const script = generateExecutableScript(skill, procedure);
+        await Bun.write(scriptPath, script);
+        await Bun.spawn(['chmod', '+x', scriptPath]).exited;
+      }
     }
 
     // Update skill with file path
@@ -259,7 +408,7 @@ export class SkillGenerator {
         if (skill) {
           // Get exemplar memories for script generation
           const memories = fetchMemoriesByIds(this.db, synthesis.exemplarMemoryIds);
-          await this.writeSkillFile(skill, memories);
+          await this.writeSkillFile(skill, memories, synthesis.content);
           generated.push(skill);
         } else {
           failed.push(synthesis.id);

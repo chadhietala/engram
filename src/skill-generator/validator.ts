@@ -151,6 +151,105 @@ export function validateSkill(skill: Skill): SkillValidationResult {
 }
 
 /**
+ * Common action verbs that often appear in skill descriptions
+ */
+const DESCRIPTION_ACTION_VERBS = [
+  'explore', 'discover', 'search', 'find', 'locate',
+  'commit', 'push', 'pull', 'merge', 'checkout',
+  'build', 'compile', 'run', 'test', 'deploy',
+  'read', 'write', 'edit', 'create', 'delete',
+  'fetch', 'request', 'send', 'upload', 'download',
+  'debug', 'fix', 'refactor', 'review', 'analyze',
+  'start', 'stop', 'configure', 'setup', 'initialize',
+  'validate', 'lint', 'format', 'generate', 'execute',
+];
+
+/**
+ * Common noun targets that appear in skill descriptions
+ */
+const DESCRIPTION_NOUNS = [
+  'codebase', 'code', 'files', 'file', 'directory', 'directories',
+  'repository', 'repo', 'project', 'module', 'package',
+  'function', 'functions', 'class', 'classes', 'component', 'components',
+  'api', 'endpoint', 'endpoints', 'route', 'routes',
+  'test', 'tests', 'spec', 'specs',
+  'config', 'configuration', 'settings',
+  'changes', 'commits', 'branches', 'workflow',
+  'database', 'schema', 'query', 'queries',
+  'dependencies', 'packages', 'modules',
+  'errors', 'issues', 'bugs', 'logs',
+  'structure', 'architecture', 'patterns',
+];
+
+/**
+ * Extract a meaningful name from an LLM-generated description
+ * Looks for verb + noun patterns like "explore codebase" -> "explore-codebase"
+ */
+export function extractNameFromDescription(description: string): string | null {
+  if (!description || description.length === 0) {
+    return null;
+  }
+
+  const lowerDesc = description.toLowerCase();
+
+  // Try to find verb + noun combination
+  for (const verb of DESCRIPTION_ACTION_VERBS) {
+    // Look for patterns like "verb the noun", "verbs noun", "verb noun"
+    const verbPatterns = [
+      new RegExp(`\\b${verb}s?\\s+(?:the\\s+)?([a-z]+)`, 'i'),
+      new RegExp(`\\b${verb}(?:ing|ed)?\\s+(?:the\\s+)?([a-z]+)`, 'i'),
+    ];
+
+    for (const pattern of verbPatterns) {
+      const match = lowerDesc.match(pattern);
+      if (match && match[1]) {
+        const noun = match[1].toLowerCase();
+        // Check if the noun is meaningful
+        if (DESCRIPTION_NOUNS.includes(noun) || noun.length >= 4) {
+          return `${verb}-${noun}`;
+        }
+      }
+    }
+  }
+
+  // Try to find just a meaningful noun and use a generic action
+  for (const noun of DESCRIPTION_NOUNS) {
+    if (lowerDesc.includes(noun)) {
+      // Try to find the closest verb before this noun
+      const nounIndex = lowerDesc.indexOf(noun);
+      const beforeNoun = lowerDesc.substring(Math.max(0, nounIndex - 50), nounIndex);
+
+      for (const verb of DESCRIPTION_ACTION_VERBS) {
+        if (beforeNoun.includes(verb)) {
+          return `${verb}-${noun}`;
+        }
+      }
+
+      // If no verb found, use a sensible default based on the noun
+      if (['codebase', 'code', 'files', 'repository', 'project'].includes(noun)) {
+        return `explore-${noun}`;
+      }
+      if (['test', 'tests', 'spec', 'specs'].includes(noun)) {
+        return `run-${noun}`;
+      }
+      if (['changes', 'commits'].includes(noun)) {
+        return `commit-${noun}`;
+      }
+    }
+  }
+
+  // Last resort: try to extract first verb and any word after it
+  for (const verb of DESCRIPTION_ACTION_VERBS) {
+    const match = lowerDesc.match(new RegExp(`\\b${verb}s?\\s+([a-z]{4,})`, 'i'));
+    if (match && match[1]) {
+      return `${verb}-${match[1]}`;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Generate a valid skill name from a string
  */
 export function generateValidSkillName(input: string): string {

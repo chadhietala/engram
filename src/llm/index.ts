@@ -42,11 +42,24 @@ const SkillContentSchema = z.object({
   whenToUse: z.array(z.string()).describe('Scenarios when this skill is useful'),
 });
 
+const UserGoalSchema = z.object({
+  goal: z.string().describe('A 2-4 word hyphenated goal name like "understand-codebase" or "debug-failing-tests"'),
+  goalDescription: z.string().describe('One sentence describing what the user is trying to accomplish'),
+  category: z.enum(['exploration', 'implementation', 'debugging', 'refactoring', 'testing', 'documentation', 'deployment', 'other']).describe('The category of the goal'),
+});
+
+const SkillScriptSchema = z.object({
+  script: z.string().describe('A complete, executable Bun/TypeScript script that implements the skill workflow'),
+  explanation: z.string().describe('Brief explanation of what the script does and how to use it'),
+});
+
 // Export inferred types
 export type PatternAnalysis = z.infer<typeof PatternAnalysisSchema>;
 export type ContradictionAnalysis = z.infer<typeof ContradictionAnalysisSchema>;
 export type SynthesisAnalysis = z.infer<typeof SynthesisAnalysisSchema>;
 export type SkillContent = z.infer<typeof SkillContentSchema>;
+export type UserGoal = z.infer<typeof UserGoalSchema>;
+export type SkillScript = z.infer<typeof SkillScriptSchema>;
 
 // ============ Analysis Functions ============
 
@@ -153,7 +166,8 @@ Create a synthesis that:
  */
 export async function generateSkillContent(
   synthesis: Synthesis,
-  exemplarMemories: Memory[]
+  exemplarMemories: Memory[],
+  userGoal?: { goal: string; goalDescription: string }
 ): Promise<SkillContent> {
   const toolSequence = exemplarMemories
     .filter(m => m.metadata.toolName)
@@ -164,8 +178,16 @@ export async function generateSkillContent(
     `- ${m.metadata.toolName}: ${m.content.substring(0, 100)}...`
   ).join('\n');
 
-  const prompt = `Generate a skill description from this learned pattern.
+  // Include user goal context if available
+  const goalContext = userGoal
+    ? `\n<user_goal>
+The user's original intent: "${userGoal.goalDescription}"
+Goal name: ${userGoal.goal}
+</user_goal>\n`
+    : '';
 
+  const prompt = `Generate a skill description from this learned pattern.
+${goalContext}
 <synthesis>
 ${synthesis.content}
 </synthesis>
@@ -179,11 +201,103 @@ ${memorySummary}
 </example_actions>
 
 Create:
-- A one-sentence description of what this skill does
-- 2-4 sentences explaining how to use this skill
-- A list of scenarios when this skill is useful`;
+- A one-sentence description that focuses on the USER'S GOAL (what they're trying to accomplish), not just the tools used
+- 2-4 sentences explaining how to use this skill to achieve that goal
+- A list of scenarios when this skill is useful
+
+IMPORTANT: Frame the description around the user's intent and outcome, not the mechanical tool operations. For example:
+- Good: "Helps you understand how a feature is implemented across multiple files"
+- Bad: "Reads files using the Read tool and searches with Grep"`;
 
   const result = await queryWithSchema(prompt, SkillContentSchema);
+  return result;
+}
+
+/**
+ * Extract the high-level user goal from user prompts and tool usage
+ */
+export async function extractUserGoal(
+  userPrompts: string[],
+  toolMemories: Memory[]
+): Promise<UserGoal> {
+  const promptList = userPrompts.map(p => `- "${p}"`).join('\n');
+
+  const toolSummary = toolMemories.slice(0, 8).map(m => {
+    const tool = m.metadata.toolName || 'unknown';
+    const input = m.metadata.toolInput
+      ? JSON.stringify(m.metadata.toolInput).substring(0, 100)
+      : '';
+    return `- ${tool}: ${input}`;
+  }).join('\n');
+
+  const prompt = `Analyze what the user was trying to accomplish based on their prompts and the tools used.
+
+<user_prompts>
+${promptList}
+</user_prompts>
+
+<tools_used>
+${toolSummary}
+</tools_used>
+
+Extract:
+1. A concise 2-4 word goal name using hyphens (like "understand-codebase", "fix-failing-tests", "implement-feature", "refactor-authentication")
+2. A one-sentence description of what the user is trying to accomplish
+3. The category of the goal
+
+Focus on the HIGH-LEVEL INTENT, not the mechanical tool usage. For example:
+- If user asked "what is index.ts for?" the goal is "understand-entrypoint" not "read-file"
+- If user asked "why is the test failing?" the goal is "debug-test-failure" not "grep-pattern"
+- If user asked "add authentication" the goal is "implement-authentication" not "edit-files"`;
+
+  const result = await queryWithSchema(prompt, UserGoalSchema);
+  return result;
+}
+
+/**
+ * Generate an intelligent, executable script for a skill
+ * This creates a real workflow, not a dumb replay of tool calls
+ */
+export async function generateSkillScript(
+  skillName: string,
+  goalDescription: string,
+  synthesisContent: string,
+  exampleToolUsage: Array<{ tool: string; description: string }>
+): Promise<SkillScript> {
+  const toolExamples = exampleToolUsage.slice(0, 5).map(t =>
+    `- ${t.tool}: ${t.description}`
+  ).join('\n');
+
+  const prompt = `Generate an intelligent Bun/TypeScript script that implements a reusable skill.
+
+<skill_name>${skillName}</skill_name>
+
+<goal>${goalDescription}</goal>
+
+<learned_pattern>
+${synthesisContent}
+</learned_pattern>
+
+<example_tool_usage>
+${toolExamples}
+</example_tool_usage>
+
+Create a complete, executable script that:
+1. Takes a target directory as the first argument (defaults to current directory)
+2. Implements the skill's GOAL intelligently - don't just replay exact commands
+3. Uses Bun APIs: Bun.file(), Bun.Glob, Bun.$\`command\`, etc.
+4. Has proper error handling and helpful output
+5. Is parameterized and works on any codebase, not just the one it learned from
+
+The script should be a WORKFLOW that accomplishes the goal, not a sequence of hardcoded file reads.
+
+For example, if the goal is "explore-codebase":
+- DON'T just read specific files like "src/index.ts"
+- DO dynamically discover structure, find entry points, analyze dependencies
+
+Return a complete script starting with #!/usr/bin/env bun`;
+
+  const result = await queryWithSchema(prompt, SkillScriptSchema);
   return result;
 }
 

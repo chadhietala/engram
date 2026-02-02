@@ -6,6 +6,13 @@ import type { Procedure, ProceduralStep } from '../stages/syntactic.ts';
 import type { Skill } from '../types/skill.ts';
 
 /**
+ * Escape special regex characters in a string
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Extract common base path from file paths
  */
 function extractBasePath(paths: string[]): string | null {
@@ -33,6 +40,12 @@ export function generateExecutableScript(
   skill: Skill,
   procedure: Procedure
 ): string {
+  // Extract base path from all file operations to compute relative paths
+  const filePaths = procedure.steps
+    .filter(s => s.parameters.file_path)
+    .map(s => s.parameters.file_path as string);
+  const basePath = extractBasePath(filePaths);
+
   const lines: string[] = [
     '#!/usr/bin/env bun',
     '/**',
@@ -48,13 +61,13 @@ export function generateExecutableScript(
     'const args = process.argv.slice(2);',
     'const targetDir = args[0] || process.cwd();',
     '',
-    'console.log(`Running ${skill.name} in ${targetDir}`);',
+    `console.log(\`Running ${skill.name} in \${targetDir}\`);`,
     '',
   ];
 
   // Generate step functions
   for (const step of procedure.steps) {
-    lines.push(generateParameterizedStepFunction(step));
+    lines.push(generateParameterizedStepFunction(step, basePath));
     lines.push('');
   }
 
@@ -80,23 +93,23 @@ export function generateExecutableScript(
   return lines.join('\n');
 }
 
-function generateParameterizedStepFunction(step: ProceduralStep): string {
+function generateParameterizedStepFunction(step: ProceduralStep, basePath: string | null): string {
   const lines: string[] = [];
 
   lines.push(`async function step${step.order}() {`);
 
   switch (step.tool) {
     case 'Bash':
-      lines.push(generateParameterizedBashStep(step));
+      lines.push(generateParameterizedBashStep(step, basePath));
       break;
     case 'Read':
-      lines.push(generateParameterizedReadStep(step));
+      lines.push(generateParameterizedReadStep(step, basePath));
       break;
     case 'Write':
-      lines.push(generateParameterizedWriteStep(step));
+      lines.push(generateParameterizedWriteStep(step, basePath));
       break;
     case 'Edit':
-      lines.push(generateParameterizedEditStep(step));
+      lines.push(generateParameterizedEditStep(step, basePath));
       break;
     case 'Glob':
       lines.push(generateParameterizedGlobStep(step));
@@ -114,11 +127,24 @@ function generateParameterizedStepFunction(step: ProceduralStep): string {
   return lines.join('\n');
 }
 
-function generateParameterizedBashStep(step: ProceduralStep): string {
+function getRelativePath(filePath: string, basePath: string | null): string {
+  if (basePath && filePath.startsWith(basePath + '/')) {
+    return filePath.slice(basePath.length + 1);
+  }
+  // Fall back to just the filename if no basePath
+  return filePath.split('/').pop() || 'file';
+}
+
+function generateParameterizedBashStep(step: ProceduralStep, basePath: string | null): string {
   const command = step.parameters.command as string || 'echo "no command"';
 
-  // Replace hardcoded paths with targetDir
-  const parameterized = command
+  // Replace hardcoded paths with targetDir, preserving relative structure
+  let parameterized = command;
+  if (basePath) {
+    parameterized = parameterized.replace(new RegExp(escapeRegex(basePath), 'g'), '${targetDir}');
+  }
+  // Also replace any remaining absolute user paths
+  parameterized = parameterized
     .replace(/\/Users\/[^/]+\/[^\s"']+/g, '${targetDir}')
     .replace(/`/g, '\\`');
 
@@ -126,31 +152,31 @@ function generateParameterizedBashStep(step: ProceduralStep): string {
   console.log(result);`;
 }
 
-function generateParameterizedReadStep(step: ProceduralStep): string {
+function generateParameterizedReadStep(step: ProceduralStep, basePath: string | null): string {
   const filePath = step.parameters.file_path as string || '';
-  const fileName = filePath.split('/').pop() || 'file';
+  const relativePath = getRelativePath(filePath, basePath);
 
-  return `  const filePath = \`\${targetDir}/${fileName}\`;
+  return `  const filePath = \`\${targetDir}/${relativePath}\`;
   const content = await Bun.file(filePath).text();
   console.log(\`Read \${content.length} bytes from \${filePath}\`);
   return content;`;
 }
 
-function generateParameterizedWriteStep(step: ProceduralStep): string {
+function generateParameterizedWriteStep(step: ProceduralStep, basePath: string | null): string {
   const filePath = step.parameters.file_path as string || '';
-  const fileName = filePath.split('/').pop() || 'file';
+  const relativePath = getRelativePath(filePath, basePath);
 
-  return `  const filePath = \`\${targetDir}/${fileName}\`;
+  return `  const filePath = \`\${targetDir}/${relativePath}\`;
   const content = ""; // TODO: Set content
   await Bun.write(filePath, content);
   console.log(\`Wrote to \${filePath}\`);`;
 }
 
-function generateParameterizedEditStep(step: ProceduralStep): string {
+function generateParameterizedEditStep(step: ProceduralStep, basePath: string | null): string {
   const filePath = step.parameters.file_path as string || '';
-  const fileName = filePath.split('/').pop() || 'file';
+  const relativePath = getRelativePath(filePath, basePath);
 
-  return `  const filePath = \`\${targetDir}/${fileName}\`;
+  return `  const filePath = \`\${targetDir}/${relativePath}\`;
   let content = await Bun.file(filePath).text();
   // TODO: Apply edit transformation
   await Bun.write(filePath, content);
@@ -281,10 +307,6 @@ export function generateReplayScript(
   lines.push('main().catch(e => { console.error(e); process.exit(1); });');
 
   return lines.join('\n');
-}
-
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
