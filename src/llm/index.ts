@@ -36,10 +36,16 @@ const SynthesisAnalysisSchema = z.object({
   abstractedPattern: z.string().describe('A higher-level principle that encompasses both thesis and antitheses'),
 });
 
+const SkillStepSchema = z.object({
+  action: z.string().describe('Brief action verb phrase like "Discover relevant files"'),
+  details: z.string().describe('1-2 sentences explaining how to perform this step'),
+});
+
 const SkillContentSchema = z.object({
   description: z.string().describe('One sentence describing what this skill does'),
   instructions: z.string().describe('2-4 sentences explaining how to use this skill'),
   whenToUse: z.array(z.string()).describe('Scenarios when this skill is useful'),
+  steps: z.array(SkillStepSchema).describe('3-6 clear steps for executing this skill'),
 });
 
 const UserGoalSchema = z.object({
@@ -201,15 +207,27 @@ ${memorySummary}
 </example_actions>
 
 Create:
-- A one-sentence description that focuses on the USER'S GOAL (what they're trying to accomplish), not just the tools used
+- A one-sentence description that focuses on the USER'S GOAL (what they're trying to accomplish), not just the tools used. MUST end with a period.
 - 2-4 sentences explaining how to use this skill to achieve that goal
 - A list of scenarios when this skill is useful
+- 3-6 clear, actionable steps for executing this skill (each step should have an action phrase and brief details)
 
-IMPORTANT: Frame the description around the user's intent and outcome, not the mechanical tool operations. For example:
-- Good: "Helps you understand how a feature is implemented across multiple files"
-- Bad: "Reads files using the Read tool and searches with Grep"`;
+IMPORTANT:
+1. Frame the description around the user's intent and outcome, not the mechanical tool operations. For example:
+   - Good: "Helps you understand how a feature is implemented across multiple files"
+   - Bad: "Reads files using the Read tool and searches with Grep"
+2. Steps should be concrete and actionable, not just repeating the tool sequence. Focus on the logical workflow:
+   - Good: "Discover relevant files" with details "Use glob patterns or keyword search to find files related to the target functionality"
+   - Bad: "Use Grep tool" with details "Call the Grep tool"
+3. Keep steps at 3-6 items - enough detail to be useful but not overwhelming`;
 
   const result = await queryWithSchema(prompt, SkillContentSchema);
+
+  // Post-process: ensure description ends with punctuation
+  if (result.description && !/[.!?]$/.test(result.description.trim())) {
+    result.description = result.description.trim() + '.';
+  }
+
   return result;
 }
 

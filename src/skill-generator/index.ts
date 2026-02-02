@@ -197,19 +197,26 @@ export class SkillGenerator {
     const llmContent = await generateSkillContent(synthesis, exemplarMemories, userGoal);
 
     // Map LLM output to SkillInstructions
+    // Use LLM-generated steps instead of truncated synthesis content
+    const steps = llmContent.steps && llmContent.steps.length > 0
+      ? llmContent.steps.map((step, index) => ({
+          order: index + 1,
+          action: step.action,
+          details: step.details,
+        }))
+      : [{
+          order: 1,
+          action: 'Follow the workflow pattern',
+          details: synthesis.content.substring(0, 200),
+        }];
+
     const instructions: SkillInstructions = {
       overview: llmContent.instructions,
       whenToUse: llmContent.whenToUse,
-      steps: [{
-        order: 1,
-        action: 'Follow the pattern described above',
-        details: synthesis.content.substring(0, 200),
-      }],
+      steps,
       examples: [],
-      edgeCases: antithesisContents.map((content) => ({
-        condition: 'When conditions differ',
-        handling: content,
-      })),
+      // Don't include raw dialectic content - only include meaningful edge cases
+      edgeCases: [],
     };
     const llmDescription = llmContent.description;
     console.error(`[SkillGenerator] LLM content generated successfully`);
@@ -291,7 +298,7 @@ export class SkillGenerator {
   }
 
   /**
-   * Write skill to file (SKILL.md + script.ts)
+   * Write skill to file (SKILL.md + scripts/script.ts)
    */
   async writeSkillFile(
     skill: Skill,
@@ -301,10 +308,12 @@ export class SkillGenerator {
     const content = generateSkillMarkdown(skill);
     const dirPath = `${this.skillsDir}/${skill.name}`;
     const filePath = `${dirPath}/SKILL.md`;
-    const scriptPath = `${dirPath}/script.ts`;
+    const scriptsDir = `${dirPath}/scripts`;
+    const scriptPath = `${scriptsDir}/script.ts`;
 
-    // Ensure directory exists
+    // Ensure directories exist (skill dir and scripts subdirectory)
     await Bun.spawn(['mkdir', '-p', dirPath]).exited;
+    await Bun.spawn(['mkdir', '-p', scriptsDir]).exited;
 
     // Write SKILL.md
     await Bun.write(filePath, content);

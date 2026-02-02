@@ -1,10 +1,10 @@
 ---
 name: improve-skill-generation
-description: Refactors code generation logic by analyzing implementation patterns across multiple files to identify and remove obsolete heuristics.
+description: Helps you understand and refactor complex systems by mapping implementation patterns across multiple interconnected files
 metadata:
   author: engram
   version: "1.0"
-  generatedAt: 2026-02-02T14:07:33.146Z
+  generatedAt: 2026-02-02T14:25:46.095Z
   sourcePatternId: 477c9c94-e6e4-4a67-9316-92ec0b157bde
   sourceSynthesisId: 1e96fca7-3e46-45b8-919d-8c3ce4b66df7
 ---
@@ -13,23 +13,32 @@ metadata:
 
 ## Overview
 
-Use this skill when you need to understand how a complex system works before making architectural changes. It systematically reads related files (types, core logic, utilities, and scripts) to build a complete picture of the implementation, then makes targeted improvements to the codebase. The skill is particularly useful for removing outdated logic and improving code quality based on the actual patterns found in the code.
+Use this skill when you need to refactor or improve a system that spans multiple files and components. It helps you systematically explore the codebase, understand how different pieces connect, identify patterns in the current implementation, and plan changes that maintain consistency across the entire system. This is especially valuable for architectural improvements where you need to see the big picture before making changes.
 
 ## When to Use
 
-- When refactoring a code generation or templating system that has accumulated technical debt
-- When you need to understand implementation patterns across multiple interconnected files before making changes
-- When removing obsolete heuristics or logic that no longer aligns with the system's goals
-- When improving naming conventions or generation logic in a codebase with scattered related files
-- When you need to trace how types, core logic, and utilities interact before making architectural decisions
+- Refactoring a feature that touches multiple files and directories
+- Understanding how a complex system is architected before making changes
+- Identifying patterns and inconsistencies across related components
+- Planning improvements to code organization or system design
+- Investigating dependencies between different parts of the codebase
 
 ## Steps
 
-1. **Follow the pattern described above**
-   Abstracted pattern from "Complex operation involving Read, Bash tools following observed sequence.": Incorporates variations: Pattern refined with additional condition: file_path, file_extension, dire
+1. **Identify the core components**
+   Start by reading the main entry points and central files to understand the system's primary purpose and structure.
 
-## Edge Cases
+2. **Map related files and dependencies**
+   Use glob patterns to discover related files across directories, then read key files to understand how components connect and depend on each other.
 
-### When conditions differ
+3. **Trace implementation patterns**
+   Follow the flow through multiple files to identify recurring patterns, architectural decisions, and how data or logic flows through the system.
 
-Pattern refined with additional condition: file_path, file_extension, directory
+4. **Identify improvement opportunities**
+   Look for inconsistencies, obsolete code, or areas where patterns could be simplified or better organized.
+
+5. **Verify the current state**
+   Use commands to check file structure, run tests, or validate assumptions about how the system currently behaves.
+
+6. **Plan systematic changes**
+   Based on your understanding, create a coherent plan for refactoring that maintains consistency across all affected files.
