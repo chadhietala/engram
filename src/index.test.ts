@@ -19,6 +19,14 @@ import {
   extractNameFromDescription,
 } from './skill-generator/validator.ts';
 import { cosineSimilarity } from './embedding/index.ts';
+import { RulesWriter } from './rules-writer/index.ts';
+import {
+  formatFrontmatter,
+  formatMetadataComment,
+  titleToFilename,
+  extractPathPatterns,
+  hashContent,
+} from './rules-writer/formatter.ts';
 
 const TEST_DB_PATH = './data/test-engram.db';
 
@@ -295,5 +303,114 @@ describe('Skill Generator', () => {
     expect(result).toBeDefined();
     expect(Array.isArray(result.generated)).toBe(true);
     expect(Array.isArray(result.failed)).toBe(true);
+  });
+});
+
+describe('Rules Writer', () => {
+  let db: Database;
+  let rulesWriter: RulesWriter;
+
+  beforeAll(() => {
+    db = resetDatabase(TEST_DB_PATH);
+    rulesWriter = new RulesWriter(db, './rules-test/engram', './rules-test/user');
+  });
+
+  test('gets writer stats', () => {
+    const stats = rulesWriter.getStats();
+
+    expect(stats).toBeDefined();
+    expect(typeof stats.total).toBe('number');
+    expect(typeof stats.active).toBe('number');
+    expect(typeof stats.invalidated).toBe('number');
+    expect(stats.byScope).toBeDefined();
+    expect(typeof stats.avgConfidence).toBe('number');
+  });
+
+  test('gets active rules (empty initially)', () => {
+    const rules = rulesWriter.getActiveRules();
+    expect(Array.isArray(rules)).toBe(true);
+    expect(rules.length).toBe(0);
+  });
+
+  test('auto-publishes (none initially)', async () => {
+    const result = await rulesWriter.autoPublishAll();
+
+    expect(result).toBeDefined();
+    expect(Array.isArray(result.published)).toBe(true);
+    expect(Array.isArray(result.skipped)).toBe(true);
+  });
+
+  test('isPublishReady returns not ready for invalid synthesis', () => {
+    const result = rulesWriter.isPublishReady('invalid-synthesis-id');
+
+    expect(result.ready).toBe(false);
+    expect(result.reason).toBe('Synthesis not found');
+  });
+});
+
+describe('Rules Formatter', () => {
+  test('formats frontmatter with paths', () => {
+    const frontmatter = formatFrontmatter({ paths: ['src/**/*.ts', '**/*.test.ts'] });
+
+    expect(frontmatter).toContain('---');
+    expect(frontmatter).toContain('paths:');
+    expect(frontmatter).toContain('src/**/*.ts');
+    expect(frontmatter).toContain('**/*.test.ts');
+  });
+
+  test('formats frontmatter empty when no paths', () => {
+    const frontmatter = formatFrontmatter({});
+    expect(frontmatter).toBe('');
+
+    const frontmatter2 = formatFrontmatter({ paths: [] });
+    expect(frontmatter2).toBe('');
+  });
+
+  test('formats metadata comment', () => {
+    const comment = formatMetadataComment({
+      patternId: 'pat-123',
+      synthesisId: 'syn-456',
+      version: 2,
+      updatedAt: '2026-02-04',
+      confidence: 0.85,
+    });
+
+    expect(comment).toContain('<!-- engram:');
+    expect(comment).toContain('pattern:pat-123');
+    expect(comment).toContain('synthesis:syn-456');
+    expect(comment).toContain('v2');
+    expect(comment).toContain('confidence:0.85');
+    expect(comment).toContain('-->');
+  });
+
+  test('generates filename from title', () => {
+    expect(titleToFilename('Git Workflow')).toBe('git-workflow');
+    expect(titleToFilename('TypeScript Testing Patterns')).toBe('typescript-testing-patterns');
+    expect(titleToFilename('API!@#Endpoints')).toBe('api-endpoints');
+  });
+
+  test('extracts path patterns from semantic keys', () => {
+    const keys = [
+      { key: 'file_path', value: 'src/components/Button.tsx' },
+      { key: 'file_path', value: 'tests/unit/utils.test.ts' },
+      { key: 'tool', value: 'Read' },
+    ];
+
+    const patterns = extractPathPatterns(keys);
+
+    expect(patterns).toContain('**/*.tsx');
+    expect(patterns).toContain('**/*.ts');
+    expect(patterns).toContain('src/**');
+    expect(patterns).toContain('tests/**');
+  });
+
+  test('hashes content deterministically', () => {
+    const hash1 = hashContent('test content');
+    const hash2 = hashContent('test content');
+    const hash3 = hashContent('different content');
+
+    expect(hash1).toBe(hash2);
+    expect(hash1).not.toBe(hash3);
+    expect(hash1.length).toBe(16);
   });
 });

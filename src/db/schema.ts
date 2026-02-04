@@ -216,6 +216,29 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at);
 
+-- Published rules tracking (integration with Claude's native memory)
+CREATE TABLE IF NOT EXISTS published_rules (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  pattern_id TEXT NOT NULL,
+  synthesis_id TEXT,
+  file_path TEXT NOT NULL,
+  scope TEXT NOT NULL CHECK(scope IN ('project', 'user')),
+  status TEXT NOT NULL CHECK(status IN ('active', 'superseded', 'invalidated')),
+  version INTEGER DEFAULT 1,
+  confidence REAL NOT NULL,
+  content_hash TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (pattern_id) REFERENCES patterns(id) ON DELETE CASCADE,
+  FOREIGN KEY (synthesis_id) REFERENCES syntheses(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_published_rules_pattern_id ON published_rules(pattern_id);
+CREATE INDEX IF NOT EXISTS idx_published_rules_status ON published_rules(status);
+CREATE INDEX IF NOT EXISTS idx_published_rules_scope ON published_rules(scope);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_published_rules_file_path ON published_rules(file_path);
+
 -- FTS5 full-text search for fast keyword matching (standalone, not external content)
 CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
   memory_id,
@@ -270,6 +293,30 @@ export const MIGRATIONS: string[] = [
   // Migration 1: Add tool_data column to syntheses table
   // Stores serialized tool sequence data at synthesis time to prevent data loss when memories decay
   `ALTER TABLE syntheses ADD COLUMN tool_data TEXT`,
+
+  // Migration 2: Add published_rules table for Claude native memory integration
+  `CREATE TABLE IF NOT EXISTS published_rules (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    pattern_id TEXT NOT NULL,
+    synthesis_id TEXT,
+    file_path TEXT NOT NULL,
+    scope TEXT NOT NULL CHECK(scope IN ('project', 'user')),
+    status TEXT NOT NULL CHECK(status IN ('active', 'superseded', 'invalidated')),
+    version INTEGER DEFAULT 1,
+    confidence REAL NOT NULL,
+    content_hash TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (pattern_id) REFERENCES patterns(id) ON DELETE CASCADE,
+    FOREIGN KEY (synthesis_id) REFERENCES syntheses(id) ON DELETE SET NULL
+  )`,
+
+  // Migration 2b: Indexes for published_rules
+  `CREATE INDEX IF NOT EXISTS idx_published_rules_pattern_id ON published_rules(pattern_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_published_rules_status ON published_rules(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_published_rules_scope ON published_rules(scope)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_published_rules_file_path ON published_rules(file_path)`,
 ];
 
 /**

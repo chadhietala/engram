@@ -1,6 +1,7 @@
 /**
  * Synthesis management - pattern resolution
  * Uses LLM for synthesis insights (required)
+ * Auto-publishes confirmed patterns to Claude's native memory (.claude/rules/)
  */
 
 import type { Database } from 'bun:sqlite';
@@ -18,6 +19,8 @@ import {
 import { getPattern, updatePattern } from '../db/queries/patterns.ts';
 import { getMemory } from '../db/queries/memories.ts';
 import { analyzeSynthesis as llmAnalyzeSynthesis } from '../llm/index.ts';
+import { RulesWriter } from '../rules-writer/index.ts';
+import { getRulesConfig } from '../config.ts';
 import type {
   Synthesis,
   SynthesisCreateInput,
@@ -226,6 +229,24 @@ export async function synthesize(
 
     // Update pattern's dialectic phase
     updatePattern(db, pattern.id, { dialecticPhase: 'synthesis' });
+
+    // Auto-publish to Claude's native memory if configured and pattern is confirmed
+    const rulesConfig = getRulesConfig();
+    if (rulesConfig.autoPublish && pattern.confidence >= rulesConfig.minConfidence) {
+      // Non-rejection resolutions with enough evidence should be published
+      if (resolutionType !== 'rejection' && [...exemplarMemoryIds].length >= rulesConfig.minSupportingMemories) {
+        try {
+          const rulesWriter = new RulesWriter(db);
+          const publishResult = await rulesWriter.publishFromSynthesis(synthesis.id);
+          if (publishResult.success) {
+            console.error(`[Synthesis] Auto-published rule: ${publishResult.filePath}`);
+          }
+        } catch (error) {
+          // Don't fail synthesis if rule publishing fails
+          console.error(`[Synthesis] Failed to auto-publish rule:`, error);
+        }
+      }
+    }
   }
 
   return synthesis;

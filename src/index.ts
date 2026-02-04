@@ -47,5 +47,9 @@ export { SkillGenerator } from './skill-generator/index.ts';
 export * from './skill-generator/validator.ts';
 export * from './skill-generator/template.ts';
 
+// Rules Writer (Claude native memory integration)
+export { RulesWriter } from './rules-writer/index.ts';
+export * from './rules-writer/formatter.ts';
+
 // Hooks
 export { handleHook, handleHookFromStdin } from './hooks/index.ts';

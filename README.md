@@ -62,6 +62,7 @@ Once installed, these commands are available:
 | `/engram-status` | Show memory counts and system status |
 | `/engram-query <search>` | Search memories semantically |
 | `/engram-generate <name>` | Generate a skill from recent patterns |
+| `/engram-publish` | Publish mature patterns as Claude rules |
 
 ## Features
 
@@ -84,6 +85,47 @@ This creates nuanced, context-aware knowledge.
 Claude analyzes your patterns and generates insights like:
 
 > "The user is building a self-improving system that observes its own tool usage patterns and automatically generates new reusable skills"
+
+### Native Memory Integration
+
+When patterns reach synthesis, Engram automatically publishes them as Claude rules—meaning **Claude remembers your patterns without the plugin running**:
+
+```
+.claude/rules/engram/
+├── testing-workflow.md      # "Run tests before committing"
+├── error-handling.md        # "Check logs after deployments"
+└── code-review.md           # "Read tests before reviewing PRs"
+```
+
+Rules include:
+- **Path-specific triggers**: Only activate for relevant file types
+- **Linked skills**: Reference executable skills for automation
+- **Confidence tracking**: Update as patterns evolve
+
+Example generated rule:
+
+```markdown
+---
+paths:
+  - "**/*.ts"
+  - "src/**"
+---
+
+# Test Before Commit
+
+Before committing any code changes, always run the test suite with `bun test`.
+
+## Related Skill
+
+This pattern has an associated skill: **test-before-commit**
+
+> Runs tests and commits changes with conventional commit messages
+
+**To invoke this skill**, say:
+- "commit my changes"
+- "run tests and commit"
+- "safe commit"
+```
 
 ### Automatic Skill Generation
 
@@ -178,6 +220,20 @@ Engram stores data in a project-local `.engram/` directory:
 - Each project gets its own isolated memory
 - Configure with `ENGRAM_DATA_DIR` environment variable if needed
 
+### Rules Publishing
+
+Mature patterns are automatically published to `.claude/rules/engram/`:
+
+| Config | Default | Description |
+|--------|---------|-------------|
+| `ENGRAM_RULES_AUTO_PUBLISH` | `true` | Auto-publish on synthesis |
+| `ENGRAM_RULES_MIN_CONFIDENCE` | `0.7` | Minimum confidence to publish |
+| `ENGRAM_RULES_MIN_MEMORIES` | `3` | Minimum supporting memories |
+| `ENGRAM_RULES_DIR` | `.claude/rules/engram` | Project rules directory |
+| `ENGRAM_USER_RULES_DIR` | `~/.claude/rules` | User-level rules |
+
+Published rules are tracked in the database and updated when patterns evolve.
+
 ## Using Generated Skills
 
 Generated skills are placed in `.claude/skills/` and can be run directly:
@@ -210,6 +266,41 @@ const review = await intelligenceWithSchema("Review this PR", ReviewSchema, { di
 // Yes/no decision
 const shouldProceed = await decide("Is this safe to deploy?", { changes });
 ```
+
+## Architecture
+
+```
+                    ┌─────────────────────────┐
+                    │   Tool Usage (Hooks)    │
+                    └───────────┬─────────────┘
+                                │
+                                ▼
+                    ┌─────────────────────────┐
+                    │   SQLite (Learning)     │
+                    │   - Raw memories        │
+                    │   - Pattern detection   │
+                    │   - Dialectic cycles    │
+                    └───────────┬─────────────┘
+                                │
+         ┌──────────────────────┼──────────────────────┐
+         │                      │                      │
+         ▼                      ▼                      ▼
+┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
+│  .claude/rules/   │  │  .claude/skills/  │  │    CLAUDE.md      │
+│  engram/*.md      │  │  {skillName}/     │  │    (optional)     │
+│  (insights)       │  │  (procedures)     │  │                   │
+└───────────────────┘  └───────────────────┘  └───────────────────┘
+         │                      │                      │
+         └──────────────────────┼──────────────────────┘
+                                │
+                                ▼
+                    ┌─────────────────────────┐
+                    │  Claude's Native Memory │
+                    │  (auto-loaded context)  │
+                    └─────────────────────────┘
+```
+
+The key insight: learning happens in SQLite, but mature knowledge graduates to Claude's native memory system—meaning it persists even without the plugin.
 
 ## Privacy
 

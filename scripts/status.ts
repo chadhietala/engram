@@ -19,6 +19,18 @@ const synthesisCount = db.query<{ count: number }, []>(`SELECT COUNT(*) as count
 const skillCount = db.query<{ count: number }, []>(`SELECT COUNT(*) as count FROM skills`).get();
 const sessionCount = db.query<{ count: number }, []>(`SELECT COUNT(*) as count FROM sessions`).get();
 
+// Query published rules (may not exist in older databases)
+let publishedRulesCount = 0;
+let activeRulesCount = 0;
+try {
+  const publishedRules = db.query<{ count: number }, []>(`SELECT COUNT(*) as count FROM published_rules`).get();
+  const activeRules = db.query<{ count: number }, []>(`SELECT COUNT(*) as count FROM published_rules WHERE status = 'active'`).get();
+  publishedRulesCount = publishedRules?.count || 0;
+  activeRulesCount = activeRules?.count || 0;
+} catch {
+  // Table doesn't exist yet - that's fine
+}
+
 console.log('=== Engram Status ===\n');
 
 console.log('Sessions:', sessionCount?.count || 0);
@@ -37,3 +49,4 @@ console.log('');
 console.log(`Patterns: ${patternCount?.count || 0}`);
 console.log(`Skill candidates: ${synthesisCount?.count || 0}`);
 console.log(`Generated skills: ${skillCount?.count || 0}`);
+console.log(`Published rules: ${activeRulesCount}/${publishedRulesCount} active`);
