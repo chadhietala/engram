@@ -97,80 +97,66 @@ This is Engram's core innovation. Rather than simply accumulating patterns, the 
 
 **Thesis Formation**
 
-A pattern *P* with observations {o₁, o₂, ..., oₙ} forms a thesis *T* when:
+A pattern $P$ with observations $\{o_1, o_2, \ldots, o_n\}$ forms a thesis $T$ when:
 
-```
-|P| ≥ N_min  ∧  C(P) ≥ γ
-```
+$$|P| \geq N_{\min} \land C(P) \geq \gamma$$
 
 Where:
-- **N_min** = minimum observation count (default: 3)
-- **C(P)** = cohesion score of the pattern
-- **γ** = cohesion threshold (default: 0.7)
+- $N_{\min}$ = minimum observation count (default: 3)
+- $C(P)$ = cohesion score of the pattern
+- $\gamma$ = cohesion threshold (default: 0.7)
 
 Cohesion is defined as the average pairwise similarity:
 
-```
-C(P) = (2 / n(n-1)) · Σᵢ<ⱼ sim(eᵢ, eⱼ)
-```
+$$C(P) = \frac{2}{n(n-1)} \sum_{i < j} \text{sim}(e_i, e_j)$$
 
 The thesis confidence is:
 
-```
-conf(T) = min(1, |P| / N_saturate) · C(P)
-```
+$$\text{conf}(T) = \min\left(1, \frac{|P|}{N_{\text{saturate}}}\right) \cdot C(P)$$
 
-Where N_saturate = 10 is the saturation point for evidence accumulation.
+Where $N_{\text{saturate}} = 10$ is the saturation point for evidence accumulation.
 
 **Antithesis Detection**
 
-An observation *o* contradicts thesis *T* when:
+An observation $o$ contradicts thesis $T$ when:
 
-```
-sim(e_o, e_T) > τ_relevant  ∧  D(o, T) > δ
-```
+$$\text{sim}(e_o, e_T) > \tau_{\text{relevant}} \land D(o, T) > \delta$$
 
 Where:
-- **τ_relevant** = relevance threshold (0.5) — observation must be in same domain
-- **D(o, T)** = divergence score measuring behavioral difference
-- **δ** = contradiction threshold (0.3)
+- $\tau_{\text{relevant}}$ = relevance threshold (0.5) — observation must be in same domain
+- $D(o, T)$ = divergence score measuring behavioral difference
+- $\delta$ = contradiction threshold (0.3)
 
 Divergence is computed as:
 
-```
-D(o, T) = 1 - Π(tool_sequence(o), expected_sequence(T))
-```
+$$D(o, T) = 1 - \Pi(\text{tool\_sequence}(o), \text{expected\_sequence}(T))$$
 
-Where Π is the normalized Levenshtein similarity between tool sequences.
+Where $\Pi$ is the normalized Levenshtein similarity between tool sequences.
 
 **Synthesis Trigger**
 
 Synthesis is triggered when antithesis accumulation reaches critical mass:
 
-```
-Σₐ weight(a) ≥ ω · conf(T)
-```
+$$\sum_a \text{weight}(a) \geq \omega \cdot \text{conf}(T)$$
 
 Where:
-- **weight(a)** = recency-weighted antithesis strength
-- **ω** = synthesis threshold ratio (default: 0.4)
+- $\text{weight}(a)$ = recency-weighted antithesis strength
+- $\omega$ = synthesis threshold ratio (default: 0.4)
 
 This means a thesis with confidence 0.8 requires antitheses totaling 0.32 weight to trigger synthesis.
 
 **Synthesis Quality Score**
 
-The resulting synthesis *S* is evaluated by:
+The resulting synthesis $S$ is evaluated by:
 
-```
-Q(S) = coverage(S) · consistency(S) · parsimony(S)
-```
+$$Q(S) = \text{coverage}(S) \cdot \text{consistency}(S) \cdot \text{parsimony}(S)$$
 
 Where:
-- **coverage(S)** = fraction of observations (thesis + antitheses) explained
-- **consistency(S)** = 1 - internal_contradiction_rate
-- **parsimony(S)** = 1 / (1 + condition_count) — simpler is better
+- $\text{coverage}(S)$ = fraction of observations (thesis + antitheses) explained
+- $\text{consistency}(S) = 1 - \text{internal\_contradiction\_rate}$
+- $\text{parsimony}(S) = \frac{1}{1 + \text{condition\_count}}$ — simpler is better
 
-A synthesis is accepted when Q(S) > Q_min (default: 0.6).
+A synthesis is accepted when $Q(S) > Q_{\min}$ (default: 0.6).
 
 ### 3.4 Procedualization Layer: Hybrid Scripts
 
@@ -261,38 +247,32 @@ The LLM generating the script learns when to use each:
 
 ### 4.4 Intelligence Point Placement
 
-The decision to use deterministic code vs. an intelligence point is formalized as an optimization problem. For a task *t* in a workflow, we compute:
+The decision to use deterministic code vs. an intelligence point is formalized as an optimization problem. For a task $t$ in a workflow, we compute:
 
 **Determinism Score**
 
-```
-D(t) = specificity(t) · predictability(t) · (1 - judgment_required(t))
-```
+$$D(t) = \text{specificity}(t) \cdot \text{predictability}(t) \cdot (1 - \text{judgment\_required}(t))$$
 
 Where:
-- **specificity(t)** ∈ [0,1] = how well-defined the input/output contract is
-- **predictability(t)** ∈ [0,1] = consistency of correct output across instances
-- **judgment_required(t)** ∈ [0,1] = degree of contextual reasoning needed
+- $\text{specificity}(t) \in [0,1]$ = how well-defined the input/output contract is
+- $\text{predictability}(t) \in [0,1]$ = consistency of correct output across instances
+- $\text{judgment\_required}(t) \in [0,1]$ = degree of contextual reasoning needed
 
 **Intelligence Score**
 
-```
-I(t) = judgment_required(t) · variability(t) · value_of_reasoning(t)
-```
+$$I(t) = \text{judgment\_required}(t) \cdot \text{variability}(t) \cdot \text{value\_of\_reasoning}(t)$$
 
 Where:
-- **variability(t)** = variance in appropriate responses across contexts
-- **value_of_reasoning(t)** = improvement in outcome quality from LLM reasoning
+- $\text{variability}(t)$ = variance in appropriate responses across contexts
+- $\text{value\_of\_reasoning}(t)$ = improvement in outcome quality from LLM reasoning
 
 **Decision Boundary**
 
 Use deterministic code when:
 
-```
-D(t) / (D(t) + I(t)) > 0.5 + margin
-```
+$$\frac{D(t)}{D(t) + I(t)} > 0.5 + \text{margin}$$
 
-Where margin = 0.1 biases toward deterministic code (faster, cheaper, more reliable).
+Where $\text{margin} = 0.1$ biases toward deterministic code (faster, cheaper, more reliable).
 
 In practice, this manifests as:
 
@@ -335,7 +315,7 @@ When a synthesis reaches maturity, Engram must decide what artifact to produce. 
 
 ### 5.1 Output Type Space
 
-Let *S* be a synthesis. The possible outputs are:
+Let $S$ be a synthesis. The possible outputs are:
 
 | Type | Description | Artifact |
 |------|-------------|----------|
@@ -346,77 +326,64 @@ Let *S* be a synthesis. The possible outputs are:
 
 ### 5.2 Content Characteristics
 
-We extract characteristics *χ(S)* from synthesis content:
+We extract characteristics $\chi(S)$ from synthesis content:
 
 **Imperative Score**
 
-```
-I(S) = |{w ∈ S : w ∈ W_imperative}| / |S|
-```
+$$\mathcal{I}(S) = \frac{|\{w \in S : w \in W_{\text{imperative}}\}|}{|S|}$$
 
-Where W_imperative = {"always", "never", "must", "ensure", "required", "do not", ...}
+Where $W_{\text{imperative}} = \{\text{"always", "never", "must", "ensure", "required", "do not"}, \ldots\}$
 
 **Procedural Score**
 
-```
-P(S) = |{p ∈ S : p matches R_procedural}| / |S|
-```
+$$\mathcal{P}(S) = \frac{|\{p \in S : p \text{ matches } R_{\text{procedural}}\}|}{|S|}$$
 
-Where R_procedural = {/step\s*\d/, /first.*then/, /workflow/, /\d+\.\s+\w/, ...}
+Where $R_{\text{procedural}} = \{$`/step\s*\d/`, `/first.*then/`, `/workflow/`, `/\d+\.\s+\w/`$, \ldots\}$
 
 **Tool Diversity**
 
-```
-T(S) = |{tool(o) : o ∈ exemplars(S)}|
-```
+$$\mathcal{T}(S) = |\{\text{tool}(o) : o \in \text{exemplars}(S)\}|$$
 
 The count of distinct tools in supporting observations.
 
 **Complexity Score**
 
-```
-K(S) = α·len(S) + β·T(S) + γ·cond(S) + δ·P(S)
-```
+$$K(S) = \alpha \cdot \text{len}(S) + \beta \cdot \mathcal{T}(S) + \gamma \cdot \text{cond}(S) + \delta \cdot \mathcal{P}(S)$$
 
 Where:
-- len(S) = normalized content length
-- cond(S) = presence of conditional logic
-- α, β, γ, δ = weighting coefficients (0.3, 0.3, 0.2, 0.2)
+- $\text{len}(S)$ = normalized content length
+- $\text{cond}(S)$ = presence of conditional logic
+- $\alpha, \beta, \gamma, \delta$ = weighting coefficients (0.3, 0.3, 0.2, 0.2)
 
 ### 5.3 Decision Function
 
 The output type is determined by:
 
-```
-output(S) =
-  | none           if conf(S) < θ_min ∨ |exemplars(S)| < N_min
-  | rule           if I(S) > τ_I ∧ P(S) < τ_P
-  | skill          if P(S) > τ_P ∧ T(S) > τ_T ∧ K(S) > κ
-  | rule_with_skill if I(S) > τ_I ∧ P(S) > τ_P ∧ T(S) > τ_T
-  | rule           otherwise
-```
+$$\text{output}(S) = \begin{cases}
+\texttt{none} & \text{if } \text{conf}(S) < \theta_{\min} \lor |\text{exemplars}(S)| < N_{\min} \\
+\texttt{rule} & \text{if } \mathcal{I}(S) > \tau_I \land \mathcal{P}(S) < \tau_P \\
+\texttt{skill} & \text{if } \mathcal{P}(S) > \tau_P \land \mathcal{T}(S) > \tau_T \land K(S) > \kappa \\
+\texttt{rule\_with\_skill} & \text{if } \mathcal{I}(S) > \tau_I \land \mathcal{P}(S) > \tau_P \land \mathcal{T}(S) > \tau_T \\
+\texttt{rule} & \text{otherwise}
+\end{cases}$$
 
 Where:
-- **θ_min** = 0.5 (minimum confidence for any output)
-- **N_min** = 2 (minimum exemplar count)
-- **τ_I** = 0.3 (imperative threshold)
-- **τ_P** = 0.3 (procedural threshold)
-- **τ_T** = 2 (tool diversity threshold)
-- **κ** = 0.5 (complexity threshold)
+- $\theta_{\min} = 0.5$ (minimum confidence for any output)
+- $N_{\min} = 2$ (minimum exemplar count)
+- $\tau_I = 0.3$ (imperative threshold)
+- $\tau_P = 0.3$ (procedural threshold)
+- $\tau_T = 2$ (tool diversity threshold)
+- $\kappa = 0.5$ (complexity threshold)
 
 ### 5.4 LLM Refinement for Uncertain Cases
 
 When the decision confidence is low (< 0.7), the LLM provides additional analysis:
 
-```
-confidence(decision) = max(margins) / Σ(margins)
-```
+$$\text{confidence}(\text{decision}) = \frac{\max(\text{margins})}{\sum \text{margins}}$$
 
 Where margins measure the distance from each decision boundary. For uncertain cases:
 
-```
-output(S) = LLM_classify(content(S), resolution(S), tools(S))
-```
+$$\text{output}(S) = \text{LLM\_classify}(\text{content}(S), \text{resolution}(S), \text{tools}(S))$$
 
 The LLM returns structured analysis including imperative/procedural assessment and recommended output type.
 
@@ -438,15 +405,13 @@ Engram publishes to `.claude/rules/engram/`, creating rules that load automatica
 
 ### 6.2 Publication Criteria
 
-A synthesis *S* qualifies for publication when:
+A synthesis $S$ qualifies for publication when:
 
-```
-pub(S) = conf(S) ≥ θ_pub ∧ |exemplars(S)| ≥ N_pub ∧ resolution(S) ≠ rejection
-```
+$$\text{pub}(S) = \text{conf}(S) \geq \theta_{\text{pub}} \land |\text{exemplars}(S)| \geq N_{\text{pub}} \land \text{resolution}(S) \neq \texttt{rejection}$$
 
 Where:
-- **θ_pub** = 0.7 (publication confidence threshold)
-- **N_pub** = 3 (minimum supporting memories)
+- $\theta_{\text{pub}} = 0.7$ (publication confidence threshold)
+- $N_{\text{pub}} = 3$ (minimum supporting memories)
 
 ### 6.3 Rule Content Generation
 
@@ -479,9 +444,7 @@ The metadata comment enables tracking and updates as patterns evolve.
 
 When a pattern's understanding changes, the rule is updated:
 
-```
-version(R') = version(R) + 1  if  hash(content(R')) ≠ hash(content(R))
-```
+$$\text{version}(R') = \text{version}(R) + 1 \quad \text{if} \quad \text{hash}(\text{content}(R')) \neq \text{hash}(\text{content}(R))$$
 
 Previous versions are superseded in the database but the file is overwritten in place.
 
@@ -489,11 +452,9 @@ Previous versions are superseded in the database but the file is overwritten in 
 
 Patterns can be promoted from project to user scope:
 
-```
-scope(R) = user  if  |{projects : R appears in project}| ≥ N_cross
-```
+$$\text{scope}(R) = \texttt{user} \quad \text{if} \quad |\{\text{projects} : R \text{ appears in project}\}| \geq N_{\text{cross}}$$
 
-Where N_cross = 3. Cross-project patterns become user-level preferences.
+Where $N_{\text{cross}} = 3$. Cross-project patterns become user-level preferences.
 
 ---
 
@@ -519,43 +480,37 @@ This is bounded self-improvement: the agent can only generate tools within its o
 
 ### 7.1 Formal Bounds on Self-Improvement
 
-Let *K(t)* represent the agent's capability at time *t*, measured as the set of tasks it can perform. The growth rate is bounded by:
+Let $K(t)$ represent the agent's capability at time $t$, measured as the set of tasks it can perform. The growth rate is bounded by:
 
-```
-dK/dt ≤ O(t) · E(t) · G(t)
-```
+$$\frac{dK}{dt} \leq O(t) \cdot E(t) \cdot G(t)$$
 
 Where:
-- **O(t)** = observation rate (new patterns per unit time)
-- **E(t)** = extraction efficiency (fraction of patterns that become skills)
-- **G(t)** = generalization factor (reusability of generated skills)
+- $O(t)$ = observation rate (new patterns per unit time)
+- $E(t)$ = extraction efficiency (fraction of patterns that become skills)
+- $G(t)$ = generalization factor (reusability of generated skills)
 
 **Convergence Property**
 
 As the agent's skill set grows, the marginal value of new observations decreases:
 
-```
-lim(t→∞) dK/dt = 0
-```
+$$\lim_{t \to \infty} \frac{dK}{dt} = 0$$
 
 This occurs because:
-1. Common patterns are captured early (diminishing returns on O(t))
-2. New observations increasingly match existing skills (E(t) decreases)
+1. Common patterns are captured early (diminishing returns on $O(t)$)
+2. New observations increasingly match existing skills ($E(t)$ decreases)
 3. The space of useful skills for a domain is finite
 
-The system converges to a stable skill set *K** representing comprehensive coverage of the user's workflow patterns.
+The system converges to a stable skill set $K^*$ representing comprehensive coverage of the user's workflow patterns.
 
 **Safety Bound**
 
 The agent's capabilities are strictly bounded by:
 
-```
-K(t) ⊆ Closure(API_tools ∪ LLM_reasoning)
-```
+$$K(t) \subseteq \text{Closure}(\text{API\_tools} \cup \text{LLM\_reasoning})$$
 
 Where:
-- **API_tools** = {file I/O, shell execution, network requests}
-- **LLM_reasoning** = capabilities of the underlying language model
+- $\text{API\_tools} = \{\text{file I/O, shell execution, network requests}\}$
+- $\text{LLM\_reasoning}$ = capabilities of the underlying language model
 
 The agent cannot exceed this closure—it can only compose existing primitives in new ways.
 
@@ -585,77 +540,63 @@ Engram implements biologically-inspired memory dynamics with formal mathematical
 
 ### 8.2 Memory Strength Model
 
-Each memory *m* has a strength value *S(m, t)* that evolves over time:
+Each memory $m$ has a strength value $S(m, t)$ that evolves over time:
 
-```
-S(m, t) = S₀ · e^(-λ(t - t₀)) · (1 + α·A(m)) · (1 + β·V(m))
-```
+$$S(m, t) = S_0 \cdot e^{-\lambda(t - t_0)} \cdot (1 + \alpha \cdot A(m)) \cdot (1 + \beta \cdot V(m))$$
 
 Where:
-- **S₀** = initial strength at encoding (typically 1.0)
-- **λ** = decay constant (we use λ = 0.1 per day)
-- **t₀** = timestamp of memory creation
-- **A(m)** = access count (number of retrievals)
-- **V(m)** = validation score (contribution to successful syntheses)
-- **α, β** = weighting coefficients (α = 0.2, β = 0.5)
+- $S_0$ = initial strength at encoding (typically 1.0)
+- $\lambda$ = decay constant (we use $\lambda = 0.1$ per day)
+- $t_0$ = timestamp of memory creation
+- $A(m)$ = access count (number of retrievals)
+- $V(m)$ = validation score (contribution to successful syntheses)
+- $\alpha, \beta$ = weighting coefficients ($\alpha = 0.2$, $\beta = 0.5$)
 
-A memory is pruned when S(m, t) < θ (threshold = 0.1).
+A memory is pruned when $S(m, t) < \theta$ (threshold = 0.1).
 
 ### 8.3 Semantic Similarity
 
-Given two observations with embeddings **e₁**, **e₂** ∈ ℝᵈ, similarity is computed as:
+Given two observations with embeddings $\mathbf{e}_1, \mathbf{e}_2 \in \mathbb{R}^d$, similarity is computed as:
 
-```
-sim(e₁, e₂) = (e₁ · e₂) / (‖e₁‖ · ‖e₂‖)
-```
+$$\text{sim}(\mathbf{e}_1, \mathbf{e}_2) = \frac{\mathbf{e}_1 \cdot \mathbf{e}_2}{\|\mathbf{e}_1\| \cdot \|\mathbf{e}_2\|}$$
 
-Observations cluster into pattern *P* when:
+Observations cluster into pattern $P$ when:
 
-```
-∀ eᵢ, eⱼ ∈ P : sim(eᵢ, eⱼ) > τ
-```
+$$\forall \, e_i, e_j \in P : \text{sim}(e_i, e_j) > \tau$$
 
-Where τ = 0.75 is the clustering threshold.
+Where $\tau = 0.75$ is the clustering threshold.
 
 ### 8.4 Information-Theoretic View
 
-Pattern detection can be viewed as compression. Given observation sequence *O* = {o₁, o₂, ..., oₙ}, we seek patterns *P* that minimize description length:
+Pattern detection can be viewed as compression. Given observation sequence $O = \{o_1, o_2, \ldots, o_n\}$, we seek patterns $P$ that minimize description length:
 
-```
-L(O) = L(P) + L(O | P)
-```
+$$L(O) = L(P) + L(O \mid P)$$
 
 Where:
-- **L(P)** = bits to describe the pattern set
-- **L(O | P)** = bits to describe observations given patterns
+- $L(P)$ = bits to describe the pattern set
+- $L(O \mid P)$ = bits to describe observations given patterns
 
 A pattern is valuable when:
 
-```
-L(O | P) < L(O | ∅) - L(P)
-```
+$$L(O \mid P) < L(O \mid \emptyset) - L(P)$$
 
-The information gain from pattern *p* is:
+The information gain from pattern $p$ is:
 
-```
-IG(p) = H(O) - H(O | p)
-```
+$$IG(p) = H(O) - H(O \mid p)$$
 
-Where H denotes entropy. Patterns with higher information gain are prioritized for thesis formation.
+Where $H$ denotes entropy. Patterns with higher information gain are prioritized for thesis formation.
 
 **Dialectic as Refinement Coding**
 
 The thesis-antithesis-synthesis cycle implements a form of refinement coding:
 
-1. **Thesis** = coarse approximation, low L(T) but high L(O | T)
+1. **Thesis** = coarse approximation, low $L(T)$ but high $L(O \mid T)$
 2. **Antithesis** = residual signal not captured by thesis
-3. **Synthesis** = refined code with better L(S) + L(O | S) tradeoff
+3. **Synthesis** = refined code with better $L(S) + L(O \mid S)$ tradeoff
 
 The synthesis improves compression by capturing conditional structure:
 
-```
-L(O | S) < L(O | T)  when  S encodes "T, except when conditions C"
-```
+$$L(O \mid S) < L(O \mid T) \quad \text{when } S \text{ encodes "} T \text{, except when conditions } C \text{"}$$
 
 ### 8.5 Consolidation During Idle
 
