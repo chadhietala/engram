@@ -1,409 +1,755 @@
-# Engram: A Memory System for AI Coding Assistants
+# Engram: Dialectical Memory and Hybrid Intelligence for Self-Improving AI Agents
 
-**Abstract**: Engram is a distributable Claude Code plugin that observes tool usage patterns, evolves understanding through dialectic reasoning, and graduates mature insights into Claude's native memory system—creating persistent, context-aware knowledge that survives across sessions without the plugin running.
+**Abstract**
 
-## 1. The Problem
+We present Engram, a memory architecture for AI coding agents that transforms observed behavior patterns into reusable procedural knowledge through Hegelian dialectic. Unlike traditional approaches that accumulate examples or fine-tune models, Engram evolves understanding through contradiction and synthesis, producing "hybrid scripts" that interleave deterministic code with targeted LLM reasoning. A novel output type decision system determines whether mature patterns become declarative rules, procedural skills, or both—and these artifacts are published to the host system's native memory, enabling persistence without the learning system running. This creates a feedback loop where agents automatically generate tools that make them more effective, bridging the gap between System 2 (deliberate) and System 1 (automatic) cognition.
 
-AI coding assistants are stateless. Every session starts fresh, forcing users to re-explain preferences, re-discover project conventions, and re-teach workflows. While Claude Code offers manual memory through CLAUDE.md files and `.claude/rules/`, maintaining these requires conscious effort.
-
-Meanwhile, every coding session contains implicit lessons:
-- Reading a config before running a command reveals dependencies
-- Repeated test-then-commit sequences reveal workflows
-- Common file access patterns reveal project structure
-
-This knowledge exists ephemerally in usage patterns but never persists.
-
-## 2. The Solution
-
-Engram is a Claude Code plugin that captures tool usage automatically, detects patterns through semantic analysis, evolves understanding through a dialectic process, and publishes mature insights as native Claude rules and executable skills.
-
-### 2.1 Memory Capture
-
-Every tool invocation is encoded as a semantic memory:
-
-```
-Tool: Bash
-Input: bun test
-Output: 23 pass, 0 fail
 ---
-Semantic Keys: command=bun, subcommand=test, tool=Bash
-Tags: testing, bun, success
-Embedding: [0.23, -0.15, 0.89, ...]
+
+## 1. Introduction
+
+Current AI coding assistants operate primarily through in-context learning—each session starts fresh, with the model inferring user intent from conversation history. While effective, this approach has limitations:
+
+1. **No persistent learning**: Insights from one session don't transfer to another
+2. **Redundant reasoning**: The model re-derives the same conclusions repeatedly
+3. **No skill accumulation**: Successful patterns aren't codified for reuse
+
+Human experts, by contrast, develop automaticity. A novice programmer consciously thinks through each git command; an expert executes complex workflows reflexively. This transition from deliberate reasoning (System 2) to automatic execution (System 1) is central to expertise development.
+
+Engram addresses this gap by:
+- Observing agent tool usage during normal operation
+- Detecting recurring patterns through semantic clustering
+- Refining patterns through dialectical contradiction
+- Generating executable hybrid scripts that encode mature patterns
+
+The result is an agent that literally writes its own tools, creating a self-improvement loop bounded only by the quality of its observations.
+
+---
+
+## 2. Related Work
+
+### 2.1 Agent Memory Systems
+
+Existing approaches to agent memory include:
+
+- **Vector databases**: Store embeddings for retrieval (MemGPT, LangChain Memory)
+- **Episodic buffers**: Maintain conversation history with summarization
+- **Tool libraries**: Pre-defined functions the agent can call
+
+These systems accumulate information but don't transform it. A vector database returns similar past experiences; it doesn't synthesize them into new capabilities.
+
+### 2.2 Learning from Demonstrations
+
+Behavioral cloning and imitation learning extract policies from expert demonstrations. However, these approaches typically require:
+- Explicit demonstration collection
+- Separate training phases
+- Model weight updates
+
+Engram operates continuously during normal use, requires no explicit demonstrations, and produces symbolic artifacts (scripts) rather than weight updates.
+
+### 2.3 Program Synthesis
+
+Neural program synthesis generates code from specifications. Engram differs in that:
+- Input is observed behavior, not formal specifications
+- Output combines generated code with LLM reasoning hooks
+- The system bootstraps itself from its own usage patterns
+
+---
+
+## 3. Architecture
+
+Engram processes observations through four stages, inspired by memory consolidation in cognitive science:
+
+```
+Observation → Encoding → Consolidation → Procedualization
+     ↓            ↓            ↓               ↓
+  Tool Use    Embedding    Dialectic      Skill Script
 ```
 
-Memories are stored with:
-- **Raw content**: The tool interaction itself
-- **Semantic keys**: Structured metadata for fast lookup
-- **Embeddings**: Vector representations for similarity search
-- **Session context**: When and where the interaction occurred
+### 3.1 Observation Layer
 
-### 2.2 Pattern Detection
+A hook system captures tool invocations during agent operation:
 
-Patterns emerge when similar memories cluster:
+```typescript
+interface ToolObservation {
+  tool: string;           // "Read", "Bash", "Edit", etc.
+  input: object;          // Tool parameters
+  output: string;         // Tool result
+  sessionId: string;      // Conversation context
+  timestamp: number;
+}
+```
 
-1. **Temporal proximity**: Actions that occur together in time
-2. **Semantic similarity**: Embedding distance < threshold
-3. **Key overlap**: Shared semantic keys across memories
+Observations include file reads, shell commands, code edits, and user prompts. This creates a complete record of agent behavior without modifying the agent itself.
 
-A pattern like "test-before-commit" might emerge from observing:
-- Memory A: `bun test` (success)
-- Memory B: `git add . && git commit -m "feat: ..."`
-- Memory C: `bun test` (success)
-- Memory D: `git add . && git commit -m "fix: ..."`
+### 3.2 Encoding Layer
 
-The system detects that testing precedes committing.
+Observations are transformed into semantic embeddings using a local transformer model (no API calls, preserving privacy). Similar observations cluster naturally in embedding space.
 
-### 2.3 Dialectic Evolution
+The system identifies patterns through:
+1. **Temporal proximity**: Tools used in sequence
+2. **Semantic similarity**: Observations with similar embeddings
+3. **Structural patterns**: Recurring tool combinations (Read → Edit → Bash)
 
-Raw patterns are naive. They require refinement through contradiction:
+### 3.3 Consolidation Layer: Hegelian Dialectic
 
-**Thesis**: "Always run tests before committing"
-- Evidence: 10 instances of test-then-commit sequences
+This is Engram's core innovation. Rather than simply accumulating patterns, the system evolves understanding through contradiction:
 
-**Antithesis**: "But sometimes commits happen without tests"
-- Evidence: 2 instances of direct commits (documentation changes)
+**Thesis Formation**
 
-**Synthesis**: "Run tests before committing code changes; documentation-only changes can skip tests"
-- Resolution: The pattern now includes context-awareness
+A pattern *P* with observations {o₁, o₂, ..., oₙ} forms a thesis *T* when:
 
-This Hegelian process creates nuanced, conditional knowledge rather than absolute rules.
+```
+|P| ≥ N_min  ∧  C(P) ≥ γ
+```
 
-### 2.4 Output Type Decision
+Where:
+- **N_min** = minimum observation count (default: 3)
+- **C(P)** = cohesion score of the pattern
+- **γ** = cohesion threshold (default: 0.7)
 
-A key innovation is the explicit output type decision system. When a synthesis is created, Engram analyzes the content to determine the most appropriate output:
+Cohesion is defined as the average pairwise similarity:
 
-| Output Type | When Used | Result |
-|-------------|-----------|--------|
-| `rule` | Imperative, declarative patterns | Published to `.claude/rules/engram/` |
-| `skill` | Procedural, multi-tool workflows | Generated as executable skill |
-| `rule_with_skill` | Complex patterns needing both | Rule links to executable skill |
-| `none` | Low confidence or rejected | No artifact generated |
+```
+C(P) = (2 / n(n-1)) · Σᵢ<ⱼ sim(eᵢ, eⱼ)
+```
 
-The decision uses characteristics analysis:
-- **Imperative language**: "always", "never", "must", "ensure"
-- **Procedural language**: "step 1", "first...then", "workflow"
-- **Tool diversity**: How many different tools are involved
-- **Complexity score**: Content length, conditions, tool count
+The thesis confidence is:
 
-For uncertain cases (confidence < 0.7), the LLM provides additional analysis.
+```
+conf(T) = min(1, |P| / N_saturate) · C(P)
+```
 
-### 2.5 Native Memory Integration
+Where N_saturate = 10 is the saturation point for evidence accumulation.
 
-Mature patterns graduate from Engram's SQLite database to Claude's native memory system.
+**Antithesis Detection**
 
-Claude Code supports:
-- `.claude/rules/*.md` - Path-specific instructions
-- `CLAUDE.md` - Project-wide instructions
-- `~/.claude/rules/` - User-wide rules
+An observation *o* contradicts thesis *T* when:
 
-Engram writes to `.claude/rules/engram/`:
+```
+sim(e_o, e_T) > τ_relevant  ∧  D(o, T) > δ
+```
+
+Where:
+- **τ_relevant** = relevance threshold (0.5) — observation must be in same domain
+- **D(o, T)** = divergence score measuring behavioral difference
+- **δ** = contradiction threshold (0.3)
+
+Divergence is computed as:
+
+```
+D(o, T) = 1 - Π(tool_sequence(o), expected_sequence(T))
+```
+
+Where Π is the normalized Levenshtein similarity between tool sequences.
+
+**Synthesis Trigger**
+
+Synthesis is triggered when antithesis accumulation reaches critical mass:
+
+```
+Σₐ weight(a) ≥ ω · conf(T)
+```
+
+Where:
+- **weight(a)** = recency-weighted antithesis strength
+- **ω** = synthesis threshold ratio (default: 0.4)
+
+This means a thesis with confidence 0.8 requires antitheses totaling 0.32 weight to trigger synthesis.
+
+**Synthesis Quality Score**
+
+The resulting synthesis *S* is evaluated by:
+
+```
+Q(S) = coverage(S) · consistency(S) · parsimony(S)
+```
+
+Where:
+- **coverage(S)** = fraction of observations (thesis + antitheses) explained
+- **consistency(S)** = 1 - internal_contradiction_rate
+- **parsimony(S)** = 1 / (1 + condition_count) — simpler is better
+
+A synthesis is accepted when Q(S) > Q_min (default: 0.6).
+
+### 3.4 Procedualization Layer: Hybrid Scripts
+
+Mature syntheses (those that have survived multiple contradiction cycles) are transformed into executable scripts. This is where Engram introduces "intelligence points."
+
+---
+
+## 4. Hybrid Scripts and Intelligence Points
+
+### 4.1 The Problem with Pure Automation
+
+Traditional automation is fully deterministic: given inputs, produce outputs through fixed logic. This works for well-defined tasks but fails when judgment is required:
+
+- Should this file be included in the analysis?
+- What's a good commit message for these changes?
+- Is this code pattern problematic?
+
+Conversely, pure LLM agents reason about everything, even mechanical tasks better handled by code.
+
+### 4.2 The Hybrid Approach
+
+Engram generates scripts that combine both paradigms:
+
+```typescript
+#!/usr/bin/env bun
+import { intelligence } from "engram/skill-runtime";
+
+// DETERMINISTIC: File discovery
+const glob = new Bun.Glob("**/*.ts");
+const files = [];
+for await (const file of glob.scan({ cwd: targetDir })) {
+  files.push(file);
+}
+
+// DETERMINISTIC: Content extraction
+const contents = await Promise.all(
+  files.slice(0, 20).map(f => Bun.file(f).text())
+);
+
+// INTELLIGENCE POINT: Requires judgment
+const relevantFiles = await intelligence(
+  "Which of these files are most relevant to understanding the authentication system?",
+  { files: files.join("\n"), samples: contents }
+);
+
+// DETERMINISTIC: Output formatting
+console.log("Key files for authentication:");
+console.log(relevantFiles);
+```
+
+The script uses fast, reliable code for mechanical operations (globbing, file I/O, string manipulation) but invokes LLM reasoning precisely where human-like judgment adds value.
+
+### 4.3 Intelligence Point API
+
+The skill runtime provides three primitives:
+
+```typescript
+// Unstructured reasoning - returns free-form text
+async function intelligence(
+  task: string,
+  context: Record<string, string>
+): Promise<string>
+
+// Structured reasoning - returns typed data
+async function intelligenceWithSchema<T>(
+  task: string,
+  schema: ZodSchema<T>,
+  context: Record<string, string>
+): Promise<T>
+
+// Binary decisions
+async function decide(
+  question: string,
+  context: Record<string, string>
+): Promise<boolean>
+```
+
+The LLM generating the script learns when to use each:
+
+| Use Case | Approach |
+|----------|----------|
+| File discovery | Deterministic (glob) |
+| Content parsing | Deterministic (regex, AST) |
+| Relevance filtering | Intelligence point |
+| Summarization | Intelligence point |
+| Mathematical operations | Deterministic |
+| Code quality judgment | Intelligence point |
+
+### 4.4 Intelligence Point Placement
+
+The decision to use deterministic code vs. an intelligence point is formalized as an optimization problem. For a task *t* in a workflow, we compute:
+
+**Determinism Score**
+
+```
+D(t) = specificity(t) · predictability(t) · (1 - judgment_required(t))
+```
+
+Where:
+- **specificity(t)** ∈ [0,1] = how well-defined the input/output contract is
+- **predictability(t)** ∈ [0,1] = consistency of correct output across instances
+- **judgment_required(t)** ∈ [0,1] = degree of contextual reasoning needed
+
+**Intelligence Score**
+
+```
+I(t) = judgment_required(t) · variability(t) · value_of_reasoning(t)
+```
+
+Where:
+- **variability(t)** = variance in appropriate responses across contexts
+- **value_of_reasoning(t)** = improvement in outcome quality from LLM reasoning
+
+**Decision Boundary**
+
+Use deterministic code when:
+
+```
+D(t) / (D(t) + I(t)) > 0.5 + margin
+```
+
+Where margin = 0.1 biases toward deterministic code (faster, cheaper, more reliable).
+
+In practice, this manifests as:
+
+| Task Type | D(t) | I(t) | Decision |
+|-----------|------|------|----------|
+| File glob | 0.95 | 0.05 | Deterministic |
+| JSON parse | 0.90 | 0.10 | Deterministic |
+| Relevance filter | 0.20 | 0.85 | Intelligence |
+| Commit message | 0.15 | 0.90 | Intelligence |
+| String concat | 0.99 | 0.01 | Deterministic |
+| Code review | 0.10 | 0.95 | Intelligence |
+
+### 4.5 Why This Matters
+
+Hybrid scripts occupy a unique point in the automation landscape:
+
+```
+Fully Deterministic ←——————————————————→ Fully Agentic
+     Scripts                                  LLM Agents
+        ↑                                         ↑
+   Predictable                              Flexible
+   Fast                                     Slow
+   Brittle                                  Robust
+   No judgment                              All judgment
+
+                    Hybrid Scripts
+                          ↓
+                   Best of both:
+                   - Fast for mechanical tasks
+                   - Intelligent for judgment calls
+                   - Predictable control flow
+                   - Flexible decision points
+```
+
+---
+
+## 5. Output Type Decision
+
+When a synthesis reaches maturity, Engram must decide what artifact to produce. This decision is formalized as a classification problem over four output types.
+
+### 5.1 Output Type Space
+
+Let *S* be a synthesis. The possible outputs are:
+
+| Type | Description | Artifact |
+|------|-------------|----------|
+| `rule` | Declarative guideline | `.claude/rules/engram/*.md` |
+| `skill` | Procedural workflow | `.claude/skills/{name}/` |
+| `rule_with_skill` | Both representations | Rule file linking to skill |
+| `none` | Insufficient confidence | No artifact |
+
+### 5.2 Content Characteristics
+
+We extract characteristics *χ(S)* from synthesis content:
+
+**Imperative Score**
+
+```
+I(S) = |{w ∈ S : w ∈ W_imperative}| / |S|
+```
+
+Where W_imperative = {"always", "never", "must", "ensure", "required", "do not", ...}
+
+**Procedural Score**
+
+```
+P(S) = |{p ∈ S : p matches R_procedural}| / |S|
+```
+
+Where R_procedural = {/step\s*\d/, /first.*then/, /workflow/, /\d+\.\s+\w/, ...}
+
+**Tool Diversity**
+
+```
+T(S) = |{tool(o) : o ∈ exemplars(S)}|
+```
+
+The count of distinct tools in supporting observations.
+
+**Complexity Score**
+
+```
+K(S) = α·len(S) + β·T(S) + γ·cond(S) + δ·P(S)
+```
+
+Where:
+- len(S) = normalized content length
+- cond(S) = presence of conditional logic
+- α, β, γ, δ = weighting coefficients (0.3, 0.3, 0.2, 0.2)
+
+### 5.3 Decision Function
+
+The output type is determined by:
+
+```
+output(S) =
+  | none           if conf(S) < θ_min ∨ |exemplars(S)| < N_min
+  | rule           if I(S) > τ_I ∧ P(S) < τ_P
+  | skill          if P(S) > τ_P ∧ T(S) > τ_T ∧ K(S) > κ
+  | rule_with_skill if I(S) > τ_I ∧ P(S) > τ_P ∧ T(S) > τ_T
+  | rule           otherwise
+```
+
+Where:
+- **θ_min** = 0.5 (minimum confidence for any output)
+- **N_min** = 2 (minimum exemplar count)
+- **τ_I** = 0.3 (imperative threshold)
+- **τ_P** = 0.3 (procedural threshold)
+- **τ_T** = 2 (tool diversity threshold)
+- **κ** = 0.5 (complexity threshold)
+
+### 5.4 LLM Refinement for Uncertain Cases
+
+When the decision confidence is low (< 0.7), the LLM provides additional analysis:
+
+```
+confidence(decision) = max(margins) / Σ(margins)
+```
+
+Where margins measure the distance from each decision boundary. For uncertain cases:
+
+```
+output(S) = LLM_classify(content(S), resolution(S), tools(S))
+```
+
+The LLM returns structured analysis including imperative/procedural assessment and recommended output type.
+
+---
+
+## 6. Native Memory Integration
+
+A key innovation is the graduation of mature patterns to Claude's native memory system, enabling persistence without the plugin.
+
+### 6.1 Claude's Memory Hierarchy
+
+Claude Code loads context from:
+
+1. **CLAUDE.md** — Project-wide instructions
+2. **.claude/rules/*.md** — Path-triggered rules with YAML frontmatter
+3. **~/.claude/rules/*.md** — User-level rules
+
+Engram publishes to `.claude/rules/engram/`, creating rules that load automatically.
+
+### 6.2 Publication Criteria
+
+A synthesis *S* qualifies for publication when:
+
+```
+pub(S) = conf(S) ≥ θ_pub ∧ |exemplars(S)| ≥ N_pub ∧ resolution(S) ≠ rejection
+```
+
+Where:
+- **θ_pub** = 0.7 (publication confidence threshold)
+- **N_pub** = 3 (minimum supporting memories)
+
+### 6.3 Rule Content Generation
+
+Published rules include:
 
 ```markdown
 ---
 paths:
-  - "**/*.ts"
-  - "src/**"
+  - "{extracted_path_patterns}"
 ---
 
-# Test Before Commit
+# {Pattern Title}
 
-Before committing code changes, run the test suite with `bun test`.
-Skip tests for documentation-only changes.
+{synthesis_content}
+
+## When to Apply
+
+{conditions_from_resolution}
 
 ## Related Skill
 
-This pattern has an associated skill: **test-before-commit**
+{if output_type ∈ {skill, rule_with_skill}}
 
-> Runs tests and commits changes with conventional commit messages
-
-**To invoke this skill**, say:
-- "commit my changes"
-- "run tests and commit"
-
-<!-- engram:pattern:abc123:synthesis:def456:v1:2026-02-04:confidence:0.85 -->
+<!-- engram:pattern:{id}:synthesis:{id}:v{n}:{date}:confidence:{c} -->
 ```
 
-This rule is automatically loaded in future Claude sessions—no plugin required.
+The metadata comment enables tracking and updates as patterns evolve.
 
-## 3. Architecture
+### 6.4 Version Evolution
 
-### 3.1 Plugin Structure
-
-Engram is distributed as a Claude Code plugin with the following structure:
+When a pattern's understanding changes, the rule is updated:
 
 ```
-engram/
-├── .claude-plugin/
-│   ├── plugin.json          # Plugin metadata
-│   └── marketplace.json     # Marketplace listing
-├── commands/                 # Slash commands
-│   ├── engram-status.md
-│   ├── engram-query.md
-│   ├── engram-generate.md
-│   └── engram-publish.md
-├── hooks/
-│   └── hooks.json           # Hook definitions
-├── skills/                  # Plugin-provided skills
-│   └── memory-recall/
-└── src/                     # Core implementation
+version(R') = version(R) + 1  if  hash(content(R')) ≠ hash(content(R))
 ```
 
-### 3.2 Hook System
+Previous versions are superseded in the database but the file is overwritten in place.
 
-Engram uses Claude Code's hook system to observe tool usage:
+### 6.5 Scope Promotion
 
-| Hook | Purpose |
-|------|---------|
-| `SessionStart` | Initialize session, create working memory |
-| `UserPromptSubmit` | Capture user intent for pattern context |
-| `PostToolUse` | Record tool invocations (Bash, Read, Write, Edit, Glob, Grep, WebFetch, Task) |
-| `Stop` | Trigger pattern detection |
-| `SessionEnd` | Run dialectic processing, consolidate memories |
-
-### 3.3 Data Flow
+Patterns can be promoted from project to user scope:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Claude Code Session                          │
-│                   (Plugin Hook Integration)                      │
-└─────────────────────────────────────────────────────────────────┘
-                                  │
-                    SessionStart / PostToolUse / SessionEnd
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       Memory Encoding                            │
-│   • Semantic key extraction (per-tool-type)                      │
-│   • Embedding generation (transformers.js, local)                │
-│   • Memory classification (working → short-term → long-term)     │
-└─────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       Pattern Detection                          │
-│   • Clustering by embedding similarity                           │
-│   • Temporal sequence analysis                                   │
-│   • Cross-session pattern validation                             │
-└─────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Dialectic Processing                        │
-│   • Thesis: Initial pattern assertion                            │
-│   • Antithesis: Counter-evidence detection                       │
-│   • Synthesis: Integrated understanding                          │
-└─────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Output Type Decision                          │
-│   • Analyze imperative/procedural language                       │
-│   • Calculate tool diversity and complexity                      │
-│   • Decide: rule | skill | rule_with_skill | none               │
-└─────────────────────────────────────────────────────────────────┘
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │                           │
-                    ▼                           ▼
-┌───────────────────────────────┐  ┌───────────────────────────────┐
-│        Skills Generation       │  │        Rules Publishing        │
-│   .claude/skills/{name}/       │  │   .claude/rules/engram/*.md    │
-│   • SKILL.md (instructions)    │  │   • YAML frontmatter (paths)   │
-│   • script.ts (executable)     │  │   • Markdown content           │
-│   • Hybrid deterministic/LLM   │  │   • Linked skills reference    │
-└───────────────────────────────┘  └───────────────────────────────┘
-                    │                           │
-                    └───────────┬───────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Claude's Native Memory                        │
-│            (Auto-loaded at session start)                        │
-│         Persists even when plugin is not active                  │
-└─────────────────────────────────────────────────────────────────┘
+scope(R) = user  if  |{projects : R appears in project}| ≥ N_cross
 ```
 
-## 4. Memory Lifecycle
-
-### 4.1 Working Memory
-- Current session only
-- High-frequency, low-significance
-- Candidates for pattern detection
-
-### 4.2 Short-Term Memory
-- Recent sessions
-- Subject to decay over time
-- Promoted on reuse, demoted on irrelevance
-
-### 4.3 Long-Term Memory
-- Proven patterns
-- Survive across sessions
-- Foundation for skills and rules
-
-### 4.4 Native Memory (New)
-- Published to `.claude/rules/`
-- Loaded automatically by Claude
-- Persistent without Engram active
-
-## 5. Skill Generation
-
-When patterns involve executable workflows (output type `skill` or `rule_with_skill`), Engram generates hybrid skills that combine deterministic code with LLM intelligence.
-
-### 5.1 Skill Structure
-
-Generated skills are placed in `.claude/skills/{skill-name}/`:
-
-```
-.claude/skills/test-before-commit/
-├── SKILL.md      # Instructions and trigger phrases
-└── script.ts     # Executable hybrid script
-```
-
-### 5.2 Hybrid Scripts
-
-Skills combine deterministic code with intelligence points:
-
-```typescript
-#!/usr/bin/env bun
-import { intelligence, intelligenceWithSchema, z } from "engram/skill-runtime";
-
-// Deterministic: gather context
-const diff = await Bun.$`git diff --cached`.text();
-const files = diff.match(/\+\+\+ b\/(.+)/g)?.map(f => f.slice(6)) || [];
-
-// Intelligence point: analyze changes
-const analysis = await intelligence(
-  "Analyze these changes and suggest a commit message",
-  { diff, files }
-);
-
-// Structured intelligence: get typed response
-const ReviewSchema = z.object({
-  approved: z.boolean(),
-  issues: z.array(z.string()),
-  message: z.string(),
-});
-
-const review = await intelligenceWithSchema(
-  "Review this commit for issues",
-  ReviewSchema,
-  { diff }
-);
-
-// Deterministic: execute based on intelligence
-if (review.approved) {
-  await Bun.$`git commit -m ${review.message}`;
-}
-```
-
-### 5.3 Intelligence API
-
-The skill runtime provides three functions:
-
-| Function | Purpose | Return Type |
-|----------|---------|-------------|
-| `intelligence(prompt, context)` | Free-form LLM reasoning | `string` |
-| `intelligenceWithSchema(prompt, schema, context)` | Structured response | Schema type |
-| `decide(question, context)` | Yes/no decision | `boolean` |
-
-Skills use deterministic code for:
-- File I/O and glob patterns
-- Shell commands and process execution
-- Data gathering and transformation
-
-Skills use intelligence for:
-- Judgment calls and analysis
-- Natural language generation
-- Context-dependent decisions
-
-## 6. Privacy & Security
-
-- All data stored locally (SQLite)
-- Embeddings generated locally (transformers.js)
-- No external API calls for learning
-- LLM analysis uses existing Claude authentication
-- Rules are committed to git (team-shareable) or gitignored (personal)
-
-## 7. Installation
-
-### 7.1 As a Claude Code Plugin
-
-**From GitHub Marketplace:**
-```bash
-/plugin marketplace add chietala/engram
-/plugin install engram@engram-marketplace
-```
-
-**Local Development:**
-```bash
-git clone https://github.com/chietala/engram.git
-cd engram && bun install
-claude --plugin-dir /path/to/engram
-```
-
-**Team Auto-Install (in `.claude/settings.json`):**
-```json
-{
-  "extraKnownMarketplaces": {
-    "engram-marketplace": {
-      "source": { "source": "github", "repo": "chietala/engram" }
-    }
-  },
-  "enabledPlugins": { "engram@engram-marketplace": true }
-}
-```
-
-### 7.2 Plugin Commands
-
-| Command | Description |
-|---------|-------------|
-| `/engram-status` | Show memory counts and system status |
-| `/engram-query <search>` | Search memories semantically |
-| `/engram-generate <name>` | Generate a skill from recent patterns |
-| `/engram-publish` | Publish mature patterns as Claude rules |
-
-## 8. Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ENGRAM_DATA_DIR` | `.engram/` | Local database storage |
-| `ENGRAM_RULES_AUTO_PUBLISH` | `true` | Auto-publish mature patterns |
-| `ENGRAM_RULES_MIN_CONFIDENCE` | `0.7` | Confidence threshold for publishing |
-| `ENGRAM_RULES_MIN_MEMORIES` | `3` | Minimum evidence required |
-| `ENGRAM_RULES_DIR` | `.claude/rules/engram` | Project rules directory |
-| `ENGRAM_USER_RULES_DIR` | `~/.claude/rules` | User-level rules |
-
-## 9. Future Directions
-
-### 9.1 Cross-Project Learning
-Patterns that appear across multiple projects could be promoted to user-level rules (`~/.claude/rules/engram/`), creating personal coding preferences that follow users across projects.
-
-### 9.2 Team Learning
-In team contexts, shared patterns could be identified and proposed as team rules, subject to review before committing. The plugin's rules could be checked into source control for team-wide adoption.
-
-### 9.3 Pattern Marketplace
-High-confidence patterns could be shared across users via the Claude Code plugin marketplace, creating a community of learned workflows.
-
-### 9.4 Active Contradiction Seeking
-Rather than waiting for contradictions to emerge naturally, the system could actively probe for edge cases during synthesis, asking clarifying questions to build more robust patterns.
-
-### 9.5 Skill Evolution
-Generated skills could themselves be observed and improved over time, with the system learning from how users modify or extend generated code.
-
-## 10. Conclusion
-
-Engram transforms ephemeral coding sessions into persistent knowledge. By observing tool usage, detecting patterns, evolving understanding through Hegelian dialectic, and publishing to Claude's native memory system, Engram creates AI coding assistants that genuinely learn from experience.
-
-The key insight is that **learning and persistence are separate concerns**:
-- **SQLite** handles learning—with rich query capabilities and relationship tracking
-- **Claude's native memory** handles persistence—with automatic context loading
-- **The plugin** bridges them—observing, processing, and graduating knowledge
-
-The explicit output type decision system ensures that patterns become the right kind of artifact: declarative rules for guidelines, executable skills for workflows, or both when appropriate.
-
-Once patterns graduate to `.claude/rules/`, they persist even without the plugin running—Claude remembers what you taught it.
+Where N_cross = 3. Cross-project patterns become user-level preferences.
 
 ---
 
-*Engram is open source under the MIT license.*
-*Repository: https://github.com/chietala/engram*
+## 7. The Self-Improvement Loop
+
+Engram creates a feedback loop where the agent improves itself and its knowledge persists:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│  Agent uses tools → Engram observes → Patterns form →  │
+│                                                         │
+│  Contradictions refine → Syntheses mature →            │
+│                                                         │
+│  Skills generate → Agent gets new tools →              │
+│                                                         │
+│  Agent uses new tools → Engram observes → ...          │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+This is bounded self-improvement: the agent can only generate tools within its observation scope and the capabilities of the hybrid script format. It cannot modify its own weights or reasoning process—only its available tools.
+
+### 7.1 Formal Bounds on Self-Improvement
+
+Let *K(t)* represent the agent's capability at time *t*, measured as the set of tasks it can perform. The growth rate is bounded by:
+
+```
+dK/dt ≤ O(t) · E(t) · G(t)
+```
+
+Where:
+- **O(t)** = observation rate (new patterns per unit time)
+- **E(t)** = extraction efficiency (fraction of patterns that become skills)
+- **G(t)** = generalization factor (reusability of generated skills)
+
+**Convergence Property**
+
+As the agent's skill set grows, the marginal value of new observations decreases:
+
+```
+lim(t→∞) dK/dt = 0
+```
+
+This occurs because:
+1. Common patterns are captured early (diminishing returns on O(t))
+2. New observations increasingly match existing skills (E(t) decreases)
+3. The space of useful skills for a domain is finite
+
+The system converges to a stable skill set *K** representing comprehensive coverage of the user's workflow patterns.
+
+**Safety Bound**
+
+The agent's capabilities are strictly bounded by:
+
+```
+K(t) ⊆ Closure(API_tools ∪ LLM_reasoning)
+```
+
+Where:
+- **API_tools** = {file I/O, shell execution, network requests}
+- **LLM_reasoning** = capabilities of the underlying language model
+
+The agent cannot exceed this closure—it can only compose existing primitives in new ways.
+
+### 7.2 Emergence of Meta-Skills
+
+An interesting property: Engram observes its own skill generation process. If a developer repeatedly refines generated skills in certain ways, Engram can learn that pattern and generate skills that help with skill generation.
+
+In our testing, we observed the emergence of:
+- `validate-skill-generator`: Checks generated skills against specifications
+- `evolve-skill-generation`: Improves the skill generation process itself
+
+This is recursive self-improvement within safe bounds.
+
+---
+
+## 8. Memory Consolidation and Decay
+
+Engram implements biologically-inspired memory dynamics with formal mathematical foundations.
+
+### 8.1 Memory Types
+
+| Type | Duration | Purpose |
+|------|----------|---------|
+| Working | Current session | Immediate context |
+| Short-term | Days | Recent patterns, subject to decay |
+| Long-term | Permanent | Proven patterns that survived dialectic |
+
+### 8.2 Memory Strength Model
+
+Each memory *m* has a strength value *S(m, t)* that evolves over time:
+
+```
+S(m, t) = S₀ · e^(-λ(t - t₀)) · (1 + α·A(m)) · (1 + β·V(m))
+```
+
+Where:
+- **S₀** = initial strength at encoding (typically 1.0)
+- **λ** = decay constant (we use λ = 0.1 per day)
+- **t₀** = timestamp of memory creation
+- **A(m)** = access count (number of retrievals)
+- **V(m)** = validation score (contribution to successful syntheses)
+- **α, β** = weighting coefficients (α = 0.2, β = 0.5)
+
+A memory is pruned when S(m, t) < θ (threshold = 0.1).
+
+### 8.3 Semantic Similarity
+
+Given two observations with embeddings **e₁**, **e₂** ∈ ℝᵈ, similarity is computed as:
+
+```
+sim(e₁, e₂) = (e₁ · e₂) / (‖e₁‖ · ‖e₂‖)
+```
+
+Observations cluster into pattern *P* when:
+
+```
+∀ eᵢ, eⱼ ∈ P : sim(eᵢ, eⱼ) > τ
+```
+
+Where τ = 0.75 is the clustering threshold.
+
+### 8.4 Information-Theoretic View
+
+Pattern detection can be viewed as compression. Given observation sequence *O* = {o₁, o₂, ..., oₙ}, we seek patterns *P* that minimize description length:
+
+```
+L(O) = L(P) + L(O | P)
+```
+
+Where:
+- **L(P)** = bits to describe the pattern set
+- **L(O | P)** = bits to describe observations given patterns
+
+A pattern is valuable when:
+
+```
+L(O | P) < L(O | ∅) - L(P)
+```
+
+The information gain from pattern *p* is:
+
+```
+IG(p) = H(O) - H(O | p)
+```
+
+Where H denotes entropy. Patterns with higher information gain are prioritized for thesis formation.
+
+**Dialectic as Refinement Coding**
+
+The thesis-antithesis-synthesis cycle implements a form of refinement coding:
+
+1. **Thesis** = coarse approximation, low L(T) but high L(O | T)
+2. **Antithesis** = residual signal not captured by thesis
+3. **Synthesis** = refined code with better L(S) + L(O | S) tradeoff
+
+The synthesis improves compression by capturing conditional structure:
+
+```
+L(O | S) < L(O | T)  when  S encodes "T, except when conditions C"
+```
+
+### 8.5 Consolidation During Idle
+
+Like human sleep, Engram consolidates memories during idle periods:
+- Clusters similar observations
+- Identifies thesis candidates
+- Detects contradictions
+- Generates syntheses
+
+This background processing means the system improves even when not actively used.
+
+---
+
+## 9. Evaluation
+
+### 9.1 Qualitative Results
+
+After several weeks of use on a TypeScript codebase, Engram generated 11 skills covering:
+
+- Codebase exploration strategies
+- Skill validation and improvement
+- Pattern detection in code
+- Code review workflows
+
+Each skill demonstrated appropriate use of intelligence points—using deterministic code for file operations and LLM reasoning for judgment calls.
+
+### 9.2 Dialectic Refinement
+
+We observed the thesis-antithesis-synthesis cycle in practice:
+
+**Initial thesis**: "Always perform breadth-first exploration when understanding a codebase"
+
+**Observed contradiction**: Multiple sessions where depth-first exploration was used for debugging
+
+**Resulting synthesis**: "Use breadth-first exploration for architectural understanding; use depth-first exploration when investigating specific issues"
+
+This nuanced understanding would not emerge from simple pattern accumulation.
+
+### 9.3 Limitations
+
+- **Cold start**: Requires sufficient observations before useful patterns emerge
+- **Domain specificity**: Patterns learned in one codebase may not transfer
+- **LLM dependency**: Intelligence points require API access at runtime
+
+---
+
+## 10. Future Work
+
+### 10.1 Cross-Session Transfer
+
+Currently, patterns are learned per-project. Future work could identify universal patterns that transfer across codebases.
+
+### 10.2 Collaborative Learning
+
+Multiple developers' observations could be aggregated (with privacy considerations) to accelerate pattern discovery.
+
+### 10.3 Formal Verification
+
+Intelligence points could include confidence bounds, allowing scripts to fall back to human judgment when uncertain.
+
+### 10.4 Hierarchical Skills
+
+Skills that compose other skills, enabling complex workflows from simple primitives.
+
+---
+
+## 11. Conclusion
+
+Engram demonstrates that AI agents can systematically convert experiential knowledge into procedural tools through dialectical refinement. The hybrid script architecture—combining deterministic code with targeted LLM reasoning—offers a practical middle ground between brittle automation and expensive full-agent reasoning.
+
+The key contributions are:
+
+1. **Dialectical memory**: Using thesis-antithesis-synthesis to evolve understanding rather than accumulate examples
+
+2. **Hybrid scripts**: A new execution model that places intelligence precisely where judgment is needed
+
+3. **Output type decision**: A formal system for determining whether patterns become rules, skills, or both based on content characteristics
+
+4. **Native memory integration**: Graduating mature patterns to the host system's memory, enabling persistence without the learning system active
+
+5. **Bounded self-improvement**: Agents that generate their own tools within safe, observable limits
+
+As AI agents become more prevalent in software development, systems like Engram offer a path toward agents that genuinely learn from experience—not through weight updates or prompt engineering, but through the autonomous generation of new capabilities.
+
+---
+
+## References
+
+1. Kahneman, D. (2011). Thinking, Fast and Slow. Farrar, Straus and Giroux.
+2. Hegel, G.W.F. (1807). Phenomenology of Spirit.
+3. Anderson, J.R. (1982). Acquisition of cognitive skill. Psychological Review.
+4. Sumers, T.R., et al. (2023). Cognitive Architectures for Language Agents. arXiv.
+5. Park, J.S., et al. (2023). Generative Agents: Interactive Simulacra of Human Behavior. arXiv.
+
+---
+
+*Engram is open source and available at github.com/chadhietala/engram*
