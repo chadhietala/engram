@@ -2,6 +2,48 @@
 
 A memory system for Claude Code that learns how you work and generates new skills from your patterns.
 
+## Installation
+
+### As a Claude Code Plugin (Recommended)
+
+**Local Development:**
+```bash
+# Clone the repo
+git clone https://github.com/chietala/engram.git
+cd engram
+bun install
+
+# Run Claude Code with the plugin
+claude --plugin-dir /path/to/engram
+```
+
+**From GitHub:**
+```bash
+# Add the marketplace
+/plugin marketplace add chietala/engram
+
+# Install the plugin
+/plugin install engram@engram-marketplace
+```
+
+**Team Auto-Install:**
+Add to your project's `.claude/settings.json`:
+```json
+{
+  "extraKnownMarketplaces": {
+    "engram-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "chietala/engram"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "engram@engram-marketplace": true
+  }
+}
+```
+
 ## The Idea
 
 Every time you use Claude Code, you're teaching it something. Engram captures those lessons automatically:
@@ -10,6 +52,16 @@ Every time you use Claude Code, you're teaching it something. Engram captures th
 - **Remember**: Stores patterns with semantic understanding
 - **Evolve**: Challenges and refines patterns through contradiction
 - **Generate**: Creates reusable Claude Skills from mature patterns
+
+## Plugin Commands
+
+Once installed, these commands are available:
+
+| Command | Description |
+|---------|-------------|
+| `/engram-status` | Show memory counts and system status |
+| `/engram-query <search>` | Search memories semantically |
+| `/engram-generate <name>` | Generate a skill from recent patterns |
 
 ## Features
 
@@ -75,23 +127,10 @@ Old, unused memories fade. Important ones strengthen.
 Query your memories naturally:
 
 ```bash
-bun scripts/query.ts "how do I handle errors"
+/engram-query "how do I handle errors"
 ```
 
 Finds relevant patterns even if wording differs.
-
-## Quick Start
-
-```bash
-# Install
-bun install
-
-# Start the worker
-bun src/worker/index.ts
-
-# Configure hooks (see docs)
-# Then just use Claude Code normally
-```
 
 ## What Gets Captured
 
@@ -133,27 +172,11 @@ console.log(analysis);
 
 The script uses deterministic code for file operations but calls `intelligence()` when human-like judgment is needed.
 
-## Checking Your Memory
+## Data Storage
 
-```bash
-# How many memories?
-curl http://localhost:37778/status
-
-# What's being processed?
-curl http://localhost:37778/queue
-
-# Database stats
-sqlite3 data/engram.db "SELECT COUNT(*) FROM memories"
-```
-
-## How It Learns
-
-```
-You use tools → Engram remembers → Patterns emerge →
-Contradictions refine → Skills generate → You get better tools
-```
-
-The more you use Claude Code, the smarter it gets about how *you* work.
+Engram stores data in a project-local `.engram/` directory:
+- Each project gets its own isolated memory
+- Configure with `ENGRAM_DATA_DIR` environment variable if needed
 
 ## Using Generated Skills
 
@@ -161,10 +184,10 @@ Generated skills are placed in `.claude/skills/` and can be run directly:
 
 ```bash
 # Run a generated skill
-bun .claude/skills/explore-codebase/scripts/script.ts ./src
+bun .claude/skills/explore-codebase/script.ts ./src
 
 # Skills support --help
-bun .claude/skills/explore-codebase/scripts/script.ts --help
+bun .claude/skills/explore-codebase/script.ts --help
 ```
 
 ### Skill Runtime
@@ -198,7 +221,7 @@ Everything runs locally:
 ## Requirements
 
 - Bun runtime
-- Claude Code with hooks enabled
+- Claude Code CLI
 
 ## License
 

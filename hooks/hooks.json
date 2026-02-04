@@ -1,0 +1,44 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/engram-hook.ts SessionStart",
+        "timeout": 5000
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/engram-hook.ts UserPromptSubmit",
+        "timeout": 3000
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Read|Write|Edit|Glob|Grep|WebFetch|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/engram-hook.ts PostToolUse",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/engram-hook.ts Stop",
+        "timeout": 3000
+      }
+    ],
+    "SessionEnd": [
+      {
+        "type": "command",
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/engram-hook.ts SessionEnd",
+        "timeout": 30000
+      }
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "engram",
+  "version": "0.1.0",
+  "description": "Memory evolution system that learns from your Claude Code usage and generates reusable skills through Hegelian dialectic",
+  "author": {
+    "name": "Chris Hietala",
+    "url": "https://github.com/chietala/engram"
+  },
+  "homepage": "https://github.com/chietala/engram",
+  "repository": "https://github.com/chietala/engram",
+  "license": "MIT",
+  "keywords": ["memory", "learning", "skills", "patterns", "dialectic"]
+}

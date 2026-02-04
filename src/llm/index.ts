@@ -37,15 +37,18 @@ const SynthesisAnalysisSchema = z.object({
 });
 
 const SkillStepSchema = z.object({
-  action: z.string().describe('Brief action verb phrase like "Discover relevant files"'),
-  details: z.string().describe('1-2 sentences explaining how to perform this step'),
+  action: z.string().describe('Brief action verb phrase like "Identify Entry Points" or "Deep Analysis"'),
+  details: z.string().describe('1-3 sentences explaining how to perform this step, including which tool to use (Glob, Grep, Read, Bash) and what parameters/patterns to use'),
+  toolHint: z.string().optional().describe('The primary tool to use for this step: Glob, Grep, Read, Bash, or "script" if running the bundled script'),
+  conditional: z.string().optional().describe('If this step is conditional, describe when to use it (e.g., "If user mentions specific feature")'),
 });
 
 const SkillContentSchema = z.object({
-  description: z.string().describe('One sentence describing what this skill does'),
+  description: z.string().describe('A trigger-optimized description starting with "Use when..." that helps Claude recognize when to activate this skill'),
+  triggerPhrases: z.array(z.string()).describe('3-5 specific phrases users might say that should activate this skill'),
   instructions: z.string().describe('2-4 sentences explaining how to use this skill'),
-  whenToUse: z.array(z.string()).describe('Scenarios when this skill is useful'),
-  steps: z.array(SkillStepSchema).describe('3-6 clear steps for executing this skill'),
+  whenToUse: z.array(z.string()).describe('Scenarios when this skill is useful, phrased as user intent patterns'),
+  steps: z.array(SkillStepSchema).describe('3-6 procedural steps with explicit tool sequences Claude can follow'),
 });
 
 const UserGoalSchema = z.object({
@@ -198,7 +201,9 @@ Goal name: ${userGoal.goal}
 </user_goal>\n`
     : '';
 
-  const prompt = `Generate a skill description from this learned pattern.
+  const prompt = `Generate a TRIGGER-OPTIMIZED skill description from this learned pattern.
+
+The description MUST help Claude Code RECOGNIZE when to automatically activate this skill.
 ${goalContext}
 <synthesis>
 ${synthesis.content}
@@ -213,19 +218,68 @@ ${memorySummary}
 </example_actions>
 
 Create:
-- A one-sentence description that focuses on the USER'S GOAL (what they're trying to accomplish), not just the tools used. MUST end with a period.
-- 2-4 sentences explaining how to use this skill to achieve that goal
-- A list of scenarios when this skill is useful
-- 3-6 clear, actionable steps for executing this skill (each step should have an action phrase and brief details)
 
-IMPORTANT:
-1. Frame the description around the user's intent and outcome, not the mechanical tool operations. For example:
-   - Good: "Helps you understand how a feature is implemented across multiple files"
-   - Bad: "Reads files using the Read tool and searches with Grep"
-2. Steps should be concrete and actionable, not just repeating the tool sequence. Focus on the logical workflow:
-   - Good: "Discover relevant files" with details "Use glob patterns or keyword search to find files related to the target functionality"
-   - Bad: "Use Grep tool" with details "Call the Grep tool"
-3. Keep steps at 3-6 items - enough detail to be useful but not overwhelming`;
+## 1. Description (CRITICAL - This is how Claude decides to activate the skill)
+The description MUST:
+- Start with "Use when..."
+- Include specific trigger phrases users would say:
+  - Questions they might ask ("how does X work?", "what does this do?")
+  - Commands they might give ("explain", "understand", "explore")
+- Include the INTENT, not just the capability
+
+Good examples:
+- "Use when user asks 'how does X work', wants to understand unfamiliar code, or says 'explain this codebase'. Triggers on exploration intent."
+- "Use when user wants to commit changes, asks 'create a commit', or says 'save my work'. Triggers on version control intent."
+
+Bad examples:
+- "Helps explore and understand codebases." (doesn't tell Claude WHEN to use it)
+- "Reads files and searches code." (describes tools, not user intent)
+
+## 2. Trigger Phrases
+Generate 3-5 specific phrases a user might say that should activate this skill.
+Focus on:
+- Question patterns ("how does X work?", "what does this do?")
+- Command patterns ("explain", "understand", "explore")
+- Intent signals, not specific words
+
+## 3. Instructions
+2-4 sentences explaining how to use this skill to achieve the goal.
+
+## 4. When to Use
+Scenarios when this skill is useful, phrased as user intent patterns (e.g., "User asks 'how does [feature] work?'")
+
+## 5. Steps (PROCEDURAL WORKFLOW)
+Generate 3-6 steps that Claude can follow as an explicit workflow.
+
+Each step MUST specify:
+- Which tool to use (Glob, Grep, Read, Bash, or "script" for bundled scripts)
+- What parameters/patterns to use
+- What to do with the results
+
+Include conditional branches for common variations using the 'conditional' field:
+- "If user mentions specific feature..."
+- "If debugging a specific issue..."
+- "If comprehensive understanding needed..."
+
+Good step example:
+{
+  "action": "Identify Entry Points",
+  "details": "Use Glob with pattern '**/index.{ts,js}' OR '**/main.{ts,js}' OR '**/app.{ts,js}' to find entry points.",
+  "toolHint": "Glob"
+}
+
+{
+  "action": "Deep Analysis",
+  "details": "For comprehensive analysis, run the bundled script: bun scripts/script.ts $TARGET_DIR",
+  "toolHint": "script",
+  "conditional": "When comprehensive understanding is needed"
+}
+
+Bad step example:
+{
+  "action": "Discover relevant files",
+  "details": "Use glob patterns to find files..."
+} (no specific tool or parameters)`;
 
   const result = await queryWithSchema(prompt, SkillContentSchema);
 
@@ -275,6 +329,69 @@ Focus on the HIGH-LEVEL INTENT, not the mechanical tool usage. For example:
 - If user asked "add authentication" the goal is "implement-authentication" not "edit-files"`;
 
   const result = await queryWithSchema(prompt, UserGoalSchema);
+  return result;
+}
+
+// Schema for trigger phrase extraction
+const TriggerPhrasesSchema = z.object({
+  triggerPhrases: z.array(z.string()).describe('3-5 generalized trigger phrases that should activate this skill'),
+  questionPatterns: z.array(z.string()).describe('Question patterns users might ask'),
+  commandPatterns: z.array(z.string()).describe('Command patterns users might give'),
+  intentSignals: z.array(z.string()).describe('Intent signals that indicate this skill should be used'),
+});
+
+export type TriggerPhrases = z.infer<typeof TriggerPhrasesSchema>;
+
+/**
+ * Extract generalizable trigger phrases from user prompts
+ * These help Claude Code automatically recognize when to activate a skill
+ */
+export async function extractTriggerPhrases(
+  userPrompts: string[],
+  toolMemories: Memory[]
+): Promise<TriggerPhrases> {
+  const promptList = userPrompts.map(p => `- "${p}"`).join('\n');
+
+  const toolSummary = toolMemories.slice(0, 5).map(m => {
+    const tool = m.metadata.toolName || 'unknown';
+    return `- ${tool}`;
+  }).join('\n');
+
+  const prompt = `Given these user prompts that triggered a workflow:
+
+<user_prompts>
+${promptList}
+</user_prompts>
+
+<tools_used>
+${toolSummary}
+</tools_used>
+
+Extract generalizable trigger phrases that should activate this skill.
+
+Focus on:
+1. **Question patterns**: How users ask about things
+   - "how does X work?"
+   - "what does this do?"
+   - "can you explain X?"
+
+2. **Command patterns**: How users give instructions
+   - "explain", "understand", "explore"
+   - "find", "search", "look for"
+   - "create", "add", "implement"
+
+3. **Intent signals**: Words/phrases that indicate intent, not specific words
+   - "unfamiliar code", "didn't write", "new to this"
+   - "not working", "broken", "failing"
+   - "improve", "optimize", "refactor"
+
+IMPORTANT:
+- Generalize from specific examples. "how does auth.ts work?" → "how does X work?"
+- Focus on intent patterns, not specific file/function names
+- Include both question and command forms
+- Each phrase should be short (3-7 words)`;
+
+  const result = await queryWithSchema(prompt, TriggerPhrasesSchema);
   return result;
 }
 

@@ -1,0 +1,17 @@
+{
+  "name": "engram-marketplace",
+  "owner": {
+    "name": "Chris Hietala"
+  },
+  "metadata": {
+    "description": "Memory evolution system for Claude Code",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "engram",
+      "source": "./",
+      "description": "Learn from your Claude Code usage and generate reusable skills"
+    }
+  ]
+}

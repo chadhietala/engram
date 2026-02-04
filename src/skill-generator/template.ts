@@ -53,7 +53,7 @@ function generateOverview(instructions: SkillInstructions): string {
 }
 
 /**
- * Generate "when to use" section
+ * Generate "when to use" section with trigger phrases
  */
 function generateWhenToUse(instructions: SkillInstructions): string {
   const lines: string[] = [];
@@ -64,24 +64,79 @@ function generateWhenToUse(instructions: SkillInstructions): string {
     lines.push(`- ${condition}`);
   }
 
+  // Add trigger phrases subsection if available
+  if (instructions.triggerPhrases && instructions.triggerPhrases.length > 0) {
+    lines.push('');
+    lines.push('### Trigger Phrases');
+    lines.push('');
+    lines.push('Claude will automatically activate this skill when users say things like:');
+    lines.push('');
+    for (const phrase of instructions.triggerPhrases) {
+      lines.push(`- "${phrase}"`);
+    }
+  }
+
   return lines.join('\n');
 }
 
 /**
- * Generate steps section
+ * Generate workflow section with explicit tool sequences
  */
-function generateSteps(instructions: SkillInstructions): string {
+function generateSteps(instructions: SkillInstructions, skillName: string): string {
   const lines: string[] = [];
-  lines.push('## Steps');
+  lines.push('## Workflow');
   lines.push('');
 
-  for (const step of instructions.steps) {
-    lines.push(`${step.order}. **${step.action}**`);
+  // Separate regular steps from conditional steps
+  const regularSteps = instructions.steps.filter(s => !s.conditional);
+  const conditionalSteps = instructions.steps.filter(s => s.conditional);
+
+  // Generate regular workflow steps
+  for (const step of regularSteps) {
+    lines.push(`### Step ${step.order}: ${step.action}`);
+    if (step.toolHint) {
+      lines.push(`**Tool**: ${step.toolHint}`);
+      lines.push('');
+    }
     if (step.details) {
-      lines.push(`   ${step.details}`);
+      lines.push(step.details);
     }
     lines.push('');
   }
+
+  // Generate conditional steps
+  if (conditionalSteps.length > 0) {
+    for (const step of conditionalSteps) {
+      lines.push(`### Conditional: ${step.conditional}`);
+      lines.push(`**${step.action}**`);
+      if (step.toolHint) {
+        lines.push(`**Tool**: ${step.toolHint}`);
+      }
+      if (step.details) {
+        lines.push('');
+        lines.push(step.details);
+      }
+      lines.push('');
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Generate resources section listing bundled scripts
+ */
+function generateResources(skillName: string): string {
+  const lines: string[] = [];
+  lines.push('## Resources');
+  lines.push('');
+  lines.push('This skill includes bundled scripts for enhanced functionality:');
+  lines.push('');
+  lines.push(`- **scripts/script.ts** - Main skill implementation script`);
+  lines.push(`  Usage: \`bun scripts/script.ts [directory] [options]\``);
+  lines.push('');
+  lines.push('The script can be invoked from within the workflow when deeper analysis is needed.');
+  lines.push('');
 
   return lines.join('\n');
 }
@@ -176,12 +231,15 @@ export function generateSkillMarkdown(skill: Skill): string {
   sections.push(generateOverview(skill.instructions));
   sections.push('');
 
-  // When to Use
+  // When to Use (with trigger phrases)
   sections.push(generateWhenToUse(skill.instructions));
   sections.push('');
 
-  // Steps
-  sections.push(generateSteps(skill.instructions));
+  // Resources (bundled scripts)
+  sections.push(generateResources(skill.name));
+
+  // Workflow (procedural steps)
+  sections.push(generateSteps(skill.instructions, skill.name));
 
   // Examples (for moderate/complex)
   const examples = generateExamples(skill.instructions, skill.complexity);

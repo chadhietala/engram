@@ -4,12 +4,11 @@
 
 import { Database } from 'bun:sqlite';
 import { SCHEMA, MIGRATIONS, REBUILD_FTS } from './schema.ts';
+import { getDbPath, getDataDir } from '../config.ts';
 
 let db: Database | null = null;
 
-const DEFAULT_DB_PATH = './data/engram.db';
-
-export function getDatabase(dbPath: string = DEFAULT_DB_PATH): Database {
+export function getDatabase(dbPath: string = getDbPath()): Database {
   if (db) return db;
 
   // Ensure data directory exists
@@ -33,7 +32,7 @@ export function getDatabase(dbPath: string = DEFAULT_DB_PATH): Database {
   return db;
 }
 
-export function initializeDatabase(dbPath: string = DEFAULT_DB_PATH): Database {
+export function initializeDatabase(dbPath: string = getDbPath()): Database {
   const database = getDatabase(dbPath);
 
   // Run schema
@@ -90,7 +89,7 @@ export function closeDatabase(): void {
   }
 }
 
-export function resetDatabase(dbPath: string = DEFAULT_DB_PATH): Database {
+export function resetDatabase(dbPath: string = getDbPath()): Database {
   closeDatabase();
 
   // Delete existing database file

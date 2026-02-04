@@ -31,7 +31,7 @@ import {
   generateExecutableScript,
   generateReplayScript,
 } from './script-generator.ts';
-import { generateSkillContent, extractUserGoal, generateSkillScript } from '../llm/index.ts';
+import { generateSkillContent, extractUserGoal, extractTriggerPhrases, generateSkillScript } from '../llm/index.ts';
 import { queryMemories } from '../db/queries/memories.ts';
 import { generateProcedure } from '../stages/syntactic.ts';
 import type {
@@ -181,6 +181,7 @@ export class SkillGenerator {
     // Try to extract user goal from associated prompts FIRST
     const userPrompts = findAssociatedUserPrompts(this.db, exemplarMemories);
     let userGoal: { goal: string; goalDescription: string } | undefined;
+    let extractedTriggerPhrases: string[] = [];
 
     if (userPrompts.length > 0) {
       try {
@@ -188,8 +189,18 @@ export class SkillGenerator {
         const extractedGoal = await extractUserGoal(userPrompts, exemplarMemories);
         userGoal = { goal: extractedGoal.goal, goalDescription: extractedGoal.goalDescription };
         console.error(`[SkillGenerator] Extracted goal: ${userGoal.goal} - ${userGoal.goalDescription}`);
+
+        // Also extract trigger phrases for auto-activation
+        console.error(`[SkillGenerator] Extracting trigger phrases...`);
+        const triggerResult = await extractTriggerPhrases(userPrompts, exemplarMemories);
+        extractedTriggerPhrases = [
+          ...triggerResult.triggerPhrases,
+          ...triggerResult.questionPatterns.slice(0, 2),
+          ...triggerResult.commandPatterns.slice(0, 2),
+        ];
+        console.error(`[SkillGenerator] Extracted ${extractedTriggerPhrases.length} trigger phrases`);
       } catch (error) {
-        console.error(`[SkillGenerator] Failed to extract goal:`, error);
+        console.error(`[SkillGenerator] Failed to extract goal/triggers:`, error);
       }
     }
 
@@ -198,18 +209,28 @@ export class SkillGenerator {
     const llmContent = await generateSkillContent(synthesis, exemplarMemories, userGoal);
 
     // Map LLM output to SkillInstructions
-    // Use LLM-generated steps instead of truncated synthesis content
+    // Use LLM-generated steps with tool hints and conditionals
     const steps = llmContent.steps && llmContent.steps.length > 0
       ? llmContent.steps.map((step, index) => ({
           order: index + 1,
           action: step.action,
           details: step.details,
+          toolHint: step.toolHint,
+          conditional: step.conditional,
         }))
       : [{
           order: 1,
           action: 'Follow the workflow pattern',
           details: synthesis.content.substring(0, 200),
         }];
+
+    // Combine trigger phrases from both sources (LLM content + extracted)
+    const allTriggerPhrases = [
+      ...(llmContent.triggerPhrases || []),
+      ...extractedTriggerPhrases,
+    ];
+    // Deduplicate
+    const uniqueTriggerPhrases = [...new Set(allTriggerPhrases)];
 
     const instructions: SkillInstructions = {
       overview: llmContent.instructions,
@@ -218,9 +239,10 @@ export class SkillGenerator {
       examples: [],
       // Don't include raw dialectic content - only include meaningful edge cases
       edgeCases: [],
+      triggerPhrases: uniqueTriggerPhrases,
     };
     const llmDescription = llmContent.description;
-    console.error(`[SkillGenerator] LLM content generated successfully`);
+    console.error(`[SkillGenerator] LLM content generated successfully (${uniqueTriggerPhrases.length} trigger phrases)`);
 
     // Generate skill name - prefer user goal, fall back to description extraction
     let baseName: string;
@@ -241,7 +263,7 @@ export class SkillGenerator {
     if (existingSkill) {
       console.error(`[SkillGenerator] Found existing skill "${existingSkill.name}" - evolving instead of duplicating`);
 
-      // Merge instructions - add new whenToUse scenarios and edge cases
+      // Merge instructions - add new whenToUse scenarios, edge cases, and trigger phrases
       const mergedInstructions: SkillInstructions = {
         overview: llmContent.instructions, // Use newer, potentially better overview
         whenToUse: [...new Set([...existingSkill.instructions.whenToUse, ...llmContent.whenToUse])],
@@ -254,6 +276,11 @@ export class SkillGenerator {
             handling: content,
           })),
         ],
+        // Merge trigger phrases from both sources
+        triggerPhrases: [...new Set([
+          ...(existingSkill.instructions.triggerPhrases || []),
+          ...uniqueTriggerPhrases,
+        ])],
       };
 
       // Update the existing skill with new version

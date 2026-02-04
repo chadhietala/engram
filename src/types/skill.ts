@@ -23,6 +23,8 @@ export interface SkillStep {
   order: number;
   action: string;
   details?: string;
+  toolHint?: string;
+  conditional?: string;
 }
 
 export interface SkillExample {
@@ -41,6 +43,7 @@ export interface SkillInstructions {
   steps: SkillStep[];
   examples: SkillExample[];
   edgeCases: SkillEdgeCase[];
+  triggerPhrases?: string[];
 }
 
 export interface Skill {

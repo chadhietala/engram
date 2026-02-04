@@ -11,6 +11,7 @@ import { queryMemories } from '../src/db/queries/memories.ts';
 import { getRecentSessions } from '../src/db/queries/sessions.ts';
 import { generateReplayScript } from '../src/skill-generator/script-generator.ts';
 import { generateValidSkillName } from '../src/skill-generator/validator.ts';
+import { getDbPath, getSkillsDir } from '../src/config.ts';
 
 const args = process.argv.slice(2);
 
@@ -42,7 +43,7 @@ for (let i = 1; i < args.length; i++) {
   }
 }
 
-const manager = new MemoryManager('./data/engram.db');
+const manager = new MemoryManager(getDbPath());
 const db = manager.getDatabase();
 
 // Get session - explicit, or most recent with tool operations
@@ -96,7 +97,7 @@ const toolData = memories.map((m) => ({
 const script = generateReplayScript(skillName, toolData, description);
 
 // Write files
-const skillDir = `.claude/skills/${skillName}`;
+const skillDir = `${getSkillsDir()}/${skillName}`;
 await Bun.spawn(['mkdir', '-p', skillDir]).exited;
 
 await Bun.write(`${skillDir}/script.ts`, script);
