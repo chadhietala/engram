@@ -68,6 +68,14 @@ const SkillScriptSchema = z.object({
   intelligencePoints: z.array(IntelligencePointSchema).optional().describe('List of intelligence points where LLM reasoning is used (empty if fully deterministic)'),
 });
 
+const OutputTypeAnalysisSchema = z.object({
+  outputType: z.enum(['rule', 'skill', 'rule_with_skill', 'none']).describe('The type of output to generate'),
+  reasoning: z.string().describe('Why this output type was chosen'),
+  decisionConfidence: z.number().min(0).max(1).describe('Confidence in this decision (0-1)'),
+  isImperative: z.boolean().describe('Does the content contain imperative language like "always", "never", "must"?'),
+  isProcedural: z.boolean().describe('Does the content describe multi-step procedures?'),
+});
+
 // Export inferred types
 export type PatternAnalysis = z.infer<typeof PatternAnalysisSchema>;
 export type ContradictionAnalysis = z.infer<typeof ContradictionAnalysisSchema>;
@@ -75,6 +83,7 @@ export type SynthesisAnalysis = z.infer<typeof SynthesisAnalysisSchema>;
 export type SkillContent = z.infer<typeof SkillContentSchema>;
 export type UserGoal = z.infer<typeof UserGoalSchema>;
 export type SkillScript = z.infer<typeof SkillScriptSchema>;
+export type LLMOutputTypeAnalysis = z.infer<typeof OutputTypeAnalysisSchema>;
 
 // ============ Analysis Functions ============
 
@@ -392,6 +401,54 @@ IMPORTANT:
 - Each phrase should be short (3-7 words)`;
 
   const result = await queryWithSchema(prompt, TriggerPhrasesSchema);
+  return result;
+}
+
+/**
+ * Analyze synthesis content to determine the optimal output type using LLM
+ * Called when heuristic confidence is below threshold (< 0.7)
+ */
+export async function analyzeOutputType(
+  synthesisContent: string,
+  resolutionType: string,
+  toolNames: string[],
+  exemplarCount: number
+): Promise<LLMOutputTypeAnalysis> {
+  const prompt = `Analyze this synthesis to determine what type of output should be generated.
+
+<synthesis_content>
+${synthesisContent}
+</synthesis_content>
+
+<resolution_type>${resolutionType}</resolution_type>
+
+<tools_involved>${toolNames.join(', ') || 'None specified'}</tools_involved>
+
+<exemplar_memories>${exemplarCount}</exemplar_memories>
+
+Determine the appropriate output type:
+
+**rule**: Generate ONLY when the synthesis describes MANDATORY behaviors that should ALWAYS or NEVER be done.
+- Contains imperatives: "always", "never", "must", "required", "ensure before X"
+- Describes constraints, not procedures
+- Examples: "Always run tests before committing", "Never commit secrets"
+
+**skill**: Generate ONLY when the synthesis describes an OPTIONAL PROCEDURE with multiple steps.
+- Describes HOW to do something, not WHEN something must be done
+- Multi-step workflow with distinct phases
+- Uses multiple tools in sequence
+- Examples: "How to debug memory leaks", "Workflow for reviewing PRs"
+
+**rule_with_skill**: Generate when there's BOTH a mandatory behavior AND a complex procedure.
+- The rule specifies WHEN (mandatory trigger)
+- The skill specifies HOW (procedure to follow)
+- Example: "Before releasing (rule), follow the deployment checklist (skill)"
+
+**none**: Generate when the resolution is a rejection or confidence is too low.
+
+Be conservative - most syntheses should be simple rules. Only choose 'skill' or 'rule_with_skill' for genuinely procedural, multi-step workflows.`;
+
+  const result = await queryWithSchema(prompt, OutputTypeAnalysisSchema);
   return result;
 }
 

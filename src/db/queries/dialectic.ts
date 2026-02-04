@@ -16,6 +16,7 @@ import type {
   SynthesisResolution,
   DialecticCycle,
   ToolDataSnapshot,
+  OutputTypeAnalysis,
 } from '../../types/dialectic.ts';
 
 // ============= Thesis Queries =============
@@ -248,6 +249,7 @@ interface SynthesisRow {
   resolution: string;
   skill_candidate: number;
   tool_data: string | null;
+  output_decision: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -257,11 +259,18 @@ function rowToSynthesis(
   antithesisIds: string[] = [],
   exemplarMemoryIds: string[] = []
 ): Synthesis {
+  const resolution = JSON.parse(row.resolution) as SynthesisResolution;
+
+  // Attach output decision to resolution if present
+  if (row.output_decision) {
+    resolution.outputDecision = JSON.parse(row.output_decision) as OutputTypeAnalysis;
+  }
+
   return {
     id: row.id,
     thesisId: row.thesis_id,
     content: row.content,
-    resolution: JSON.parse(row.resolution) as SynthesisResolution,
+    resolution,
     skillCandidate: row.skill_candidate === 1,
     antithesisIds,
     exemplarMemoryIds,
@@ -279,16 +288,21 @@ export function createSynthesis(
   const timestamp = now();
   const toolDataJson = input.toolData ? JSON.stringify(input.toolData) : null;
 
+  // Extract outputDecision from resolution for separate storage
+  const { outputDecision, ...resolutionWithoutDecision } = input.resolution;
+  const outputDecisionJson = outputDecision ? JSON.stringify(outputDecision) : null;
+
   db.run(
-    `INSERT INTO syntheses (id, thesis_id, content, resolution, skill_candidate, tool_data, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO syntheses (id, thesis_id, content, resolution, skill_candidate, tool_data, output_decision, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.thesisId,
       input.content,
-      JSON.stringify(input.resolution),
+      JSON.stringify(resolutionWithoutDecision),
       0,
       toolDataJson,
+      outputDecisionJson,
       timestamp,
       timestamp,
     ]
@@ -398,6 +412,22 @@ export function addExemplarToSynthesis(
     `INSERT OR IGNORE INTO synthesis_memories (synthesis_id, memory_id, created_at) VALUES (?, ?, ?)`,
     [synthesisId, memoryId, timestamp]
   );
+}
+
+/**
+ * Update the output decision for a synthesis
+ */
+export function updateOutputDecision(
+  db: Database,
+  synthesisId: string,
+  outputDecision: OutputTypeAnalysis
+): Synthesis | null {
+  const timestamp = now();
+  db.run(
+    `UPDATE syntheses SET output_decision = ?, updated_at = ? WHERE id = ?`,
+    [JSON.stringify(outputDecision), timestamp, synthesisId]
+  );
+  return getSynthesis(db, synthesisId);
 }
 
 // ============= Dialectic Cycle Queries =============

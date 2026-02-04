@@ -317,6 +317,10 @@ export const MIGRATIONS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_published_rules_status ON published_rules(status)`,
   `CREATE INDEX IF NOT EXISTS idx_published_rules_scope ON published_rules(scope)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_published_rules_file_path ON published_rules(file_path)`,
+
+  // Migration 3: Add output_decision column to syntheses table
+  // Stores the explicit decision about what artifact to generate (rule, skill, rule_with_skill, none)
+  `ALTER TABLE syntheses ADD COLUMN output_decision TEXT`,
 ];
 
 /**

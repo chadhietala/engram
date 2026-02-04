@@ -414,3 +414,189 @@ describe('Rules Formatter', () => {
     expect(hash1.length).toBe(16);
   });
 });
+
+describe('Output Type Determination', () => {
+  // Import the determineOutputType function
+  const { determineOutputType } = require('./dialectic/synthesis.ts');
+
+  test('returns none for rejection resolution', () => {
+    const result = determineOutputType(
+      'This pattern was rejected',
+      { type: 'rejection' },
+      [],
+      5,
+      0.8
+    );
+
+    expect(result.outputType).toBe('none');
+    expect(result.decisionConfidence).toBe(1.0);
+  });
+
+  test('returns none for low confidence', () => {
+    const result = determineOutputType(
+      'Some pattern content',
+      { type: 'integration' },
+      [],
+      5,
+      0.3 // Below 0.5 threshold
+    );
+
+    expect(result.outputType).toBe('none');
+    expect(result.reasoning).toContain('confidence');
+  });
+
+  test('returns none for insufficient exemplars', () => {
+    const result = determineOutputType(
+      'Some pattern content',
+      { type: 'integration' },
+      [],
+      1, // Below 2 threshold
+      0.8
+    );
+
+    expect(result.outputType).toBe('none');
+    expect(result.reasoning).toContain('evidence');
+  });
+
+  test('returns rule for imperative-only content', () => {
+    const result = determineOutputType(
+      'Always run tests before committing. Never commit secrets.',
+      { type: 'integration' },
+      [{ tool: 'Bash', action: 'bun test' }],
+      5,
+      0.8
+    );
+
+    expect(result.outputType).toBe('rule');
+    expect(result.characteristics.isImperative).toBe(true);
+    expect(result.characteristics.isProcedural).toBe(false);
+  });
+
+  test('returns skill for procedural + multi-tool + complex content', () => {
+    // Need long content (>500 chars) to get high complexity, plus conditions
+    const longContent = 'Step 1: First search for files using glob patterns. Step 2: Then read the content of each matched file. Step 3: Finally analyze patterns using grep. Next, create a detailed report. ' +
+      'If the analysis shows issues depending on the context, proceed to the next phase. ' +
+      'This is a complex workflow that requires multiple tools and careful consideration. '.repeat(3);
+
+    const result = determineOutputType(
+      longContent,
+      { type: 'integration' },
+      [
+        { tool: 'Glob', action: '**/*.ts' },
+        { tool: 'Read', action: 'file.ts' },
+        { tool: 'Grep', action: 'pattern' },
+        { tool: 'Bash', action: 'analyze' },
+      ],
+      5,
+      0.8
+    );
+
+    expect(result.outputType).toBe('skill');
+    expect(result.characteristics.isProcedural).toBe(true);
+    expect(result.characteristics.toolDiversity).toBeGreaterThan(2);
+    expect(result.characteristics.complexity).toBeGreaterThan(0.5);
+  });
+
+  test('returns rule_with_skill for imperative + procedural + multi-tool', () => {
+    const result = determineOutputType(
+      'Always follow this debugging workflow before releasing. Step 1: First run the linter. Step 2: Then read the error logs. Finally run tests to verify.',
+      { type: 'integration' },
+      [
+        { tool: 'Bash', action: 'lint' },
+        { tool: 'Read', action: 'logs' },
+        { tool: 'Grep', action: 'error' },
+      ],
+      5,
+      0.8
+    );
+
+    expect(result.outputType).toBe('rule_with_skill');
+    expect(result.characteristics.isImperative).toBe(true);
+    expect(result.characteristics.isProcedural).toBe(true);
+    expect(result.characteristics.toolDiversity).toBeGreaterThan(2);
+  });
+
+  test('returns rule_with_skill for conditional resolution with conditions', () => {
+    const result = determineOutputType(
+      'When debugging memory issues, if the problem involves leaks then use profiler.',
+      { type: 'conditional', conditions: ['memory issues', 'leaks'] },
+      [{ tool: 'Bash' }, { tool: 'Read' }],
+      5,
+      0.8
+    );
+
+    expect(result.outputType).toBe('rule_with_skill');
+    expect(result.characteristics.hasConditions).toBe(true);
+  });
+
+  test('detects imperative patterns correctly', () => {
+    const imperativeTexts = [
+      'Always validate input',
+      'Never use eval()',
+      'You must run tests',
+      'Required: format code',
+      'Ensure tests pass',
+      'Before committing, check',
+    ];
+
+    for (const text of imperativeTexts) {
+      const result = determineOutputType(
+        text,
+        { type: 'integration' },
+        [],
+        5,
+        0.8
+      );
+      expect(result.characteristics.isImperative).toBe(true);
+    }
+  });
+
+  test('detects procedural patterns correctly', () => {
+    const proceduralTexts = [
+      'Step 1: Do this',
+      'First do A, then do B',
+      'Next, proceed with',
+      'Finally, complete the task',
+      'This workflow involves',
+      '1. First item 2. Second item',
+    ];
+
+    for (const text of proceduralTexts) {
+      const result = determineOutputType(
+        text,
+        { type: 'integration' },
+        [],
+        5,
+        0.8
+      );
+      expect(result.characteristics.isProcedural).toBe(true);
+    }
+  });
+
+  test('calculates complexity score correctly', () => {
+    // Low complexity
+    const lowResult = determineOutputType(
+      'Short content',
+      { type: 'integration' },
+      [{ tool: 'Read' }],
+      2,
+      0.6
+    );
+    expect(lowResult.characteristics.complexity).toBeLessThan(0.3);
+
+    // High complexity
+    const highResult = determineOutputType(
+      'A'.repeat(600) + ' if condition then do something depending on context',
+      { type: 'conditional', conditions: ['a', 'b'] },
+      [
+        { tool: 'Glob' },
+        { tool: 'Read' },
+        { tool: 'Grep' },
+        { tool: 'Bash' },
+      ],
+      5,
+      0.8
+    );
+    expect(highResult.characteristics.complexity).toBeGreaterThan(0.5);
+  });
+});

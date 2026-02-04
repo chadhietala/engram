@@ -18,7 +18,7 @@ import {
 } from '../db/queries/dialectic.ts';
 import { getPattern, updatePattern } from '../db/queries/patterns.ts';
 import { getMemory } from '../db/queries/memories.ts';
-import { analyzeSynthesis as llmAnalyzeSynthesis } from '../llm/index.ts';
+import { analyzeSynthesis as llmAnalyzeSynthesis, analyzeOutputType as llmAnalyzeOutputType } from '../llm/index.ts';
 import { RulesWriter } from '../rules-writer/index.ts';
 import { getRulesConfig } from '../config.ts';
 import type {
@@ -29,6 +29,8 @@ import type {
   Thesis,
   Antithesis,
   ToolDataSnapshot,
+  SynthesisOutputType,
+  OutputTypeAnalysis,
 } from '../types/dialectic.ts';
 import type { Memory } from '../types/memory.ts';
 import { promoteMemory } from '../db/queries/memories.ts';
@@ -65,6 +67,210 @@ export function extractToolDataFromMemories(memories: Memory[]): ToolDataSnapsho
   }
 
   return toolData;
+}
+
+// Patterns for detecting imperative language
+const IMPERATIVE_PATTERNS = [
+  /\balways\b/i,
+  /\bnever\b/i,
+  /\bmust\b/i,
+  /\brequired?\b/i,
+  /\bensure\b/i,
+  /\bbefore\s+\w+ing\b/i,
+  /\bafter\s+\w+ing\b/i,
+  /\bshould\s+always\b/i,
+  /\bshould\s+never\b/i,
+  /\bdo\s+not\b/i,
+  /\bdon't\b/i,
+];
+
+// Patterns for detecting procedural language
+const PROCEDURAL_PATTERNS = [
+  /\bstep\s*\d/i,
+  /\bfirst\b.*\bthen\b/i,
+  /\bnext\b/i,
+  /\bfinally\b/i,
+  /\bworkflow\b/i,
+  /\bprocedure\b/i,
+  /\bprocess\b/i,
+  /\d+\.\s+\w/,  // Numbered lists
+];
+
+/**
+ * Analyze characteristics of synthesis content for output type decision
+ */
+function analyzeCharacteristics(
+  content: string,
+  resolution: SynthesisResolution,
+  toolData: ToolDataSnapshot[]
+): OutputTypeAnalysis['characteristics'] {
+  // Check for imperative language
+  const isImperative = IMPERATIVE_PATTERNS.some(pattern => pattern.test(content));
+
+  // Check for procedural language
+  const isProcedural = PROCEDURAL_PATTERNS.some(pattern => pattern.test(content));
+
+  // Count distinct tools
+  const distinctTools = new Set(toolData.map(t => t.tool));
+  const toolDiversity = distinctTools.size;
+
+  // Check for conditions
+  const hasConditions = resolution.type === 'conditional' ||
+    /\bif\b/i.test(content) ||
+    /\bwhen\b.*\bthen\b/i.test(content) ||
+    /\bdepending\s+on\b/i.test(content);
+
+  // Calculate complexity score (0-1)
+  let complexity = 0;
+  complexity += content.length > 500 ? 0.3 : content.length > 200 ? 0.15 : 0;
+  complexity += toolDiversity > 3 ? 0.3 : toolDiversity > 1 ? 0.15 : 0;
+  complexity += hasConditions ? 0.2 : 0;
+  complexity += isProcedural ? 0.2 : 0;
+  complexity = Math.min(complexity, 1);
+
+  return {
+    isImperative,
+    isProcedural,
+    toolDiversity,
+    hasConditions,
+    complexity,
+  };
+}
+
+/**
+ * Determine the output type for a synthesis using heuristics
+ * Returns the decision with confidence score
+ */
+export function determineOutputType(
+  content: string,
+  resolution: SynthesisResolution,
+  toolData: ToolDataSnapshot[],
+  exemplarCount: number,
+  patternConfidence: number
+): OutputTypeAnalysis {
+  const characteristics = analyzeCharacteristics(content, resolution, toolData);
+
+  // Decision logic based on the plan
+  let outputType: SynthesisOutputType;
+  let reasoning: string;
+  let decisionConfidence: number;
+
+  // Rejection = none
+  if (resolution.type === 'rejection') {
+    return {
+      outputType: 'none',
+      reasoning: 'Resolution type is rejection - no artifact generated',
+      decisionConfidence: 1.0,
+      characteristics,
+    };
+  }
+
+  // Low confidence or insufficient evidence = none
+  if (patternConfidence < 0.5 || exemplarCount < 2) {
+    return {
+      outputType: 'none',
+      reasoning: `Insufficient confidence (${patternConfidence.toFixed(2)}) or evidence (${exemplarCount} exemplars)`,
+      decisionConfidence: 0.9,
+      characteristics,
+    };
+  }
+
+  // Imperative + procedural + multi-tool = rule_with_skill
+  if (characteristics.isImperative && characteristics.isProcedural && characteristics.toolDiversity > 2) {
+    outputType = 'rule_with_skill';
+    reasoning = 'Contains imperative language, procedural steps, and uses multiple tools';
+    decisionConfidence = 0.85;
+  }
+  // Imperative only = rule
+  else if (characteristics.isImperative && !characteristics.isProcedural) {
+    outputType = 'rule';
+    reasoning = 'Contains imperative language without complex procedures';
+    decisionConfidence = 0.9;
+  }
+  // Procedural + multi-tool + complex = skill
+  else if (characteristics.isProcedural && characteristics.toolDiversity > 2 && characteristics.complexity > 0.5) {
+    outputType = 'skill';
+    reasoning = 'Describes procedural workflow with multiple tools and high complexity';
+    decisionConfidence = 0.8;
+  }
+  // Conditional resolution = rule_with_skill (conditions need explanation)
+  else if (resolution.type === 'conditional' && characteristics.hasConditions) {
+    outputType = 'rule_with_skill';
+    reasoning = 'Conditional resolution with context-dependent behavior requires both rule and skill';
+    decisionConfidence = 0.75;
+  }
+  // High complexity alone = skill
+  else if (characteristics.complexity > 0.6) {
+    outputType = 'skill';
+    reasoning = 'High complexity content is better suited as a skill';
+    decisionConfidence = 0.7;
+  }
+  // Default = rule
+  else {
+    outputType = 'rule';
+    reasoning = 'Default: straightforward pattern best expressed as a rule';
+    decisionConfidence = 0.8;
+  }
+
+  return {
+    outputType,
+    reasoning,
+    decisionConfidence,
+    characteristics,
+  };
+}
+
+/**
+ * Determine output type with optional LLM enhancement for uncertain cases
+ */
+export async function determineOutputTypeWithLLM(
+  content: string,
+  resolution: SynthesisResolution,
+  toolData: ToolDataSnapshot[],
+  exemplarCount: number,
+  patternConfidence: number
+): Promise<OutputTypeAnalysis> {
+  // First, get heuristic decision
+  const heuristicDecision = determineOutputType(
+    content,
+    resolution,
+    toolData,
+    exemplarCount,
+    patternConfidence
+  );
+
+  // If confidence is high enough, use heuristic decision
+  if (heuristicDecision.decisionConfidence >= 0.7) {
+    return heuristicDecision;
+  }
+
+  // For uncertain cases, use LLM to refine the decision
+  try {
+    const toolNames = toolData.map(t => t.tool);
+    const llmAnalysis = await llmAnalyzeOutputType(
+      content,
+      resolution.type,
+      toolNames,
+      exemplarCount
+    );
+
+    // Combine LLM analysis with heuristic characteristics
+    return {
+      outputType: llmAnalysis.outputType,
+      reasoning: `LLM-enhanced: ${llmAnalysis.reasoning}`,
+      decisionConfidence: llmAnalysis.decisionConfidence,
+      characteristics: {
+        ...heuristicDecision.characteristics,
+        // Override with LLM's assessment if it detected these
+        isImperative: llmAnalysis.isImperative,
+        isProcedural: llmAnalysis.isProcedural,
+      },
+    };
+  } catch (error) {
+    // Fall back to heuristic if LLM fails
+    console.error('[Synthesis] LLM output type analysis failed, using heuristics:', error);
+    return heuristicDecision;
+  }
 }
 
 /**
@@ -154,6 +360,68 @@ function generateAbstraction(thesis: Thesis, antitheses: Antithesis[]): string {
 }
 
 /**
+ * Execute the output decision - publish rule, generate skill, or both
+ */
+async function executeOutputDecision(
+  db: Database,
+  synthesis: Synthesis,
+  outputDecision: OutputTypeAnalysis
+): Promise<void> {
+  const rulesConfig = getRulesConfig();
+
+  switch (outputDecision.outputType) {
+    case 'rule': {
+      // Publish rule only
+      if (rulesConfig.autoPublish) {
+        try {
+          const rulesWriter = new RulesWriter(db);
+          const publishResult = await rulesWriter.publishFromSynthesis(synthesis.id);
+          if (publishResult.success) {
+            console.error(`[Synthesis] Published rule: ${publishResult.filePath}`);
+          }
+        } catch (error) {
+          console.error(`[Synthesis] Failed to publish rule:`, error);
+        }
+      }
+      break;
+    }
+
+    case 'skill': {
+      // Mark as skill candidate only (skill generation happens separately)
+      markAsSkillCandidate(db, synthesis.id, true);
+      console.error(`[Synthesis] Marked as skill candidate: ${synthesis.id}`);
+      break;
+    }
+
+    case 'rule_with_skill': {
+      // First mark as skill candidate so skill gets generated
+      markAsSkillCandidate(db, synthesis.id, true);
+      console.error(`[Synthesis] Marked as skill candidate: ${synthesis.id}`);
+
+      // Then publish rule (which will find and link the skill when available)
+      if (rulesConfig.autoPublish) {
+        try {
+          const rulesWriter = new RulesWriter(db);
+          const publishResult = await rulesWriter.publishFromSynthesis(synthesis.id);
+          if (publishResult.success) {
+            console.error(`[Synthesis] Published rule with skill reference: ${publishResult.filePath}`);
+          }
+        } catch (error) {
+          console.error(`[Synthesis] Failed to publish rule:`, error);
+        }
+      }
+      break;
+    }
+
+    case 'none':
+    default:
+      // No action - insufficient confidence or rejected
+      console.error(`[Synthesis] No artifact generated: ${outputDecision.reasoning}`);
+      break;
+  }
+}
+
+/**
  * Create a synthesis from thesis and antitheses
  * Uses LLM for content generation (required)
  */
@@ -205,6 +473,22 @@ export async function synthesize(
   // Extract tool data from exemplar memories before they could be deleted by decay
   const toolData = extractToolDataFromMemories(exemplarMemories);
 
+  // Get pattern for confidence check
+  const pattern = getPattern(db, thesis.patternId);
+  const patternConfidence = pattern?.confidence ?? 0;
+
+  // Determine output type using heuristics (with LLM fallback for uncertain cases)
+  const outputDecision = await determineOutputTypeWithLLM(
+    content,
+    resolution,
+    toolData,
+    [...exemplarMemoryIds].length,
+    patternConfidence
+  );
+
+  // Attach output decision to resolution
+  resolution.outputDecision = outputDecision;
+
   const input: SynthesisCreateInput = {
     thesisId,
     antithesisIds: antitheses.map((a) => a.id),
@@ -220,7 +504,6 @@ export async function synthesize(
   promoteExemplarMemories(db, [...exemplarMemoryIds]);
 
   // Resolve the dialectic cycle
-  const pattern = getPattern(db, thesis.patternId);
   if (pattern) {
     const cycle = getCycleByPattern(db, pattern.id);
     if (cycle) {
@@ -230,22 +513,10 @@ export async function synthesize(
     // Update pattern's dialectic phase
     updatePattern(db, pattern.id, { dialecticPhase: 'synthesis' });
 
-    // Auto-publish to Claude's native memory if configured and pattern is confirmed
+    // Execute the output decision (publish rule, mark skill candidate, or both)
     const rulesConfig = getRulesConfig();
-    if (rulesConfig.autoPublish && pattern.confidence >= rulesConfig.minConfidence) {
-      // Non-rejection resolutions with enough evidence should be published
-      if (resolutionType !== 'rejection' && [...exemplarMemoryIds].length >= rulesConfig.minSupportingMemories) {
-        try {
-          const rulesWriter = new RulesWriter(db);
-          const publishResult = await rulesWriter.publishFromSynthesis(synthesis.id);
-          if (publishResult.success) {
-            console.error(`[Synthesis] Auto-published rule: ${publishResult.filePath}`);
-          }
-        } catch (error) {
-          // Don't fail synthesis if rule publishing fails
-          console.error(`[Synthesis] Failed to auto-publish rule:`, error);
-        }
-      }
+    if (rulesConfig.autoPublish && patternConfidence >= rulesConfig.minConfidence) {
+      await executeOutputDecision(db, synthesis, outputDecision);
     }
   }
 

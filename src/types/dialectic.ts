@@ -7,6 +7,36 @@ export type ContradictionType = 'direct' | 'refinement' | 'edge_case' | 'context
 export type ResolutionType = 'integration' | 'rejection' | 'conditional' | 'abstraction';
 export type DialecticPhase = 'thesis' | 'antithesis' | 'synthesis';
 
+/**
+ * Synthesis output type - determines what artifact to generate
+ * - 'rule': Mandatory behavior ("always run tests before commit")
+ * - 'skill': Optional procedure ("how to change log level for debugging")
+ * - 'rule_with_skill': A rule that references a skill for implementation details
+ * - 'none': No artifact (e.g., rejection or low confidence)
+ */
+export type SynthesisOutputType = 'rule' | 'skill' | 'rule_with_skill' | 'none';
+
+/**
+ * Analysis of what output type to generate from a synthesis
+ */
+export interface OutputTypeAnalysis {
+  outputType: SynthesisOutputType;
+  reasoning: string;
+  decisionConfidence: number;
+  characteristics: {
+    /** Content contains imperative language ("always", "never", "must") */
+    isImperative: boolean;
+    /** Content describes multi-step procedures */
+    isProcedural: boolean;
+    /** Number of distinct tools involved */
+    toolDiversity: number;
+    /** Content has conditional branches */
+    hasConditions: boolean;
+    /** Overall complexity score 0-1 */
+    complexity: number;
+  };
+}
+
 export interface Pattern {
   id: string;
   name: string;
@@ -45,6 +75,8 @@ export interface SynthesisResolution {
   type: ResolutionType;
   conditions?: string[];
   abstraction?: string;
+  /** Explicit decision about what output type to generate */
+  outputDecision?: OutputTypeAnalysis;
 }
 
 /**
