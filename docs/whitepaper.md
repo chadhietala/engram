@@ -129,7 +129,7 @@ Where:
 
 Divergence is computed as:
 
-$$D(o, T) = 1 - \Pi(\text{tool\_sequence}(o), \text{expected\_sequence}(T))$$
+$$D(o, T) = 1 - \Pi(\mathrm{toolSeq}(o), \mathrm{expectedSeq}(T))$$
 
 Where $\Pi$ is the normalized Levenshtein similarity between tool sequences.
 
@@ -153,8 +153,8 @@ $$Q(S) = \text{coverage}(S) \cdot \text{consistency}(S) \cdot \text{parsimony}(S
 
 Where:
 - $\text{coverage}(S)$ = fraction of observations (thesis + antitheses) explained
-- $\text{consistency}(S) = 1 - \text{internal\_contradiction\_rate}$
-- $\text{parsimony}(S) = \frac{1}{1 + \text{condition\_count}}$ — simpler is better
+- $\mathrm{consistency}(S) = 1 - r_{\mathrm{contradiction}}$
+- $\mathrm{parsimony}(S) = \frac{1}{1 + n_{\mathrm{conditions}}}$ — simpler is better
 
 A synthesis is accepted when $Q(S) > Q_{\min}$ (default: 0.6).
 
@@ -251,20 +251,20 @@ The decision to use deterministic code vs. an intelligence point is formalized a
 
 **Determinism Score**
 
-$$D(t) = \text{specificity}(t) \cdot \text{predictability}(t) \cdot (1 - \text{judgment\_required}(t))$$
+$$D(t) = \mathrm{spec}(t) \cdot \mathrm{pred}(t) \cdot (1 - \mathrm{judg}(t))$$
 
 Where:
-- $\text{specificity}(t) \in [0,1]$ = how well-defined the input/output contract is
-- $\text{predictability}(t) \in [0,1]$ = consistency of correct output across instances
-- $\text{judgment\_required}(t) \in [0,1]$ = degree of contextual reasoning needed
+- $\mathrm{spec}(t) \in [0,1]$ = how well-defined the input/output contract is
+- $\mathrm{pred}(t) \in [0,1]$ = consistency of correct output across instances
+- $\mathrm{judg}(t) \in [0,1]$ = degree of contextual reasoning needed
 
 **Intelligence Score**
 
-$$I(t) = \text{judgment\_required}(t) \cdot \text{variability}(t) \cdot \text{value\_of\_reasoning}(t)$$
+$$I(t) = \mathrm{judg}(t) \cdot \mathrm{var}(t) \cdot \mathrm{value}(t)$$
 
 Where:
-- $\text{variability}(t)$ = variance in appropriate responses across contexts
-- $\text{value\_of\_reasoning}(t)$ = improvement in outcome quality from LLM reasoning
+- $\mathrm{var}(t)$ = variance in appropriate responses across contexts
+- $\mathrm{value}(t)$ = improvement in outcome quality from LLM reasoning
 
 **Decision Boundary**
 
@@ -363,7 +363,7 @@ $$\text{output}(S) = \begin{cases}
 \texttt{none} & \text{if } \text{conf}(S) < \theta_{\min} \lor |\text{exemplars}(S)| < N_{\min} \\
 \texttt{rule} & \text{if } \mathcal{I}(S) > \tau_I \land \mathcal{P}(S) < \tau_P \\
 \texttt{skill} & \text{if } \mathcal{P}(S) > \tau_P \land \mathcal{T}(S) > \tau_T \land K(S) > \kappa \\
-\texttt{rule\_with\_skill} & \text{if } \mathcal{I}(S) > \tau_I \land \mathcal{P}(S) > \tau_P \land \mathcal{T}(S) > \tau_T \\
+\texttt{rule+skill} & \text{if } \mathcal{I}(S) > \tau_I \land \mathcal{P}(S) > \tau_P \land \mathcal{T}(S) > \tau_T \\
 \texttt{rule} & \text{otherwise}
 \end{cases}$$
 
@@ -383,7 +383,7 @@ $$\text{confidence}(\text{decision}) = \frac{\max(\text{margins})}{\sum \text{ma
 
 Where margins measure the distance from each decision boundary. For uncertain cases:
 
-$$\text{output}(S) = \text{LLM\_classify}(\text{content}(S), \text{resolution}(S), \text{tools}(S))$$
+$$\mathrm{output}(S) = \mathrm{LLM}(\mathrm{content}(S), \mathrm{resolution}(S), \mathrm{tools}(S))$$
 
 The LLM returns structured analysis including imperative/procedural assessment and recommended output type.
 
@@ -506,11 +506,11 @@ The system converges to a stable skill set $K^*$ representing comprehensive cove
 
 The agent's capabilities are strictly bounded by:
 
-$$K(t) \subseteq \text{Closure}(\text{API\_tools} \cup \text{LLM\_reasoning})$$
+$$K(t) \subseteq \mathrm{Closure}(\mathcal{A} \cup \mathcal{L})$$
 
 Where:
-- $\text{API\_tools} = \{\text{file I/O, shell execution, network requests}\}$
-- $\text{LLM\_reasoning}$ = capabilities of the underlying language model
+- $\mathcal{A}$ = API tools (file I/O, shell execution, network requests)
+- $\mathcal{L}$ = LLM reasoning capabilities
 
 The agent cannot exceed this closure—it can only compose existing primitives in new ways.
 
