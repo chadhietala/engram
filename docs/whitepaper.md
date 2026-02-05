@@ -2,7 +2,7 @@
 
 **Abstract**
 
-We present Engram, a memory architecture for AI coding agents that transforms observed behavior patterns into reusable procedural knowledge through Hegelian dialectic. Unlike traditional approaches that accumulate examples or fine-tune models, Engram evolves understanding through contradiction and synthesis, producing "hybrid scripts" that interleave deterministic code with targeted LLM reasoning. A novel output type decision system determines whether mature patterns become declarative rules, procedural skills, or both—and these artifacts are published to the host system's native memory, enabling persistence without the learning system running. This creates a feedback loop where agents automatically generate tools that make them more effective, bridging the gap between System 2 (deliberate) and System 1 (automatic) cognition.
+We present Engram, a memory architecture for AI coding agents that transforms observed behavior patterns into reusable procedural knowledge through Hegelian dialectic. Unlike traditional approaches that accumulate examples or fine-tune models, Engram evolves understanding through contradiction and synthesis, producing Agent Skills compatible with Claude's official format. These skills contain "hybrid scripts" that interleave deterministic code with targeted LLM reasoning—placing intelligence precisely where judgment is needed. A novel output type decision system determines whether mature patterns become declarative rules, procedural skills, or both—publishing artifacts to Claude Code's native memory and skills directories. This creates a feedback loop where agents automatically generate tools that make them more effective, bridging the gap between System 2 (deliberate) and System 1 (automatic) cognition.
 
 ---
 
@@ -68,6 +68,12 @@ Neural program synthesis generates code from specifications. Engram differs in t
 - Input is observed behavior, not formal specifications
 - Output combines generated code with LLM reasoning hooks
 - The system bootstraps itself from its own usage patterns
+
+### 2.8 Claude's Agent Skills
+
+Claude's Agent Skills [17] provide a standard format for extending Claude with modular capabilities. Skills are directories containing `SKILL.md` (instructions with YAML frontmatter) and optional bundled scripts. Claude discovers skills via metadata at startup, loads instructions on-demand when triggered, and executes scripts via bash without loading their code into context.
+
+Engram generates Skills in this official format, but with a key difference: **automatic generation from observed behavior**. While Agent Skills are typically authored manually, Engram observes tool usage patterns, refines them through dialectic, and produces Skills automatically. This positions Engram as a learning layer that populates Claude's skill system without requiring explicit authoring.
 
 ---
 
@@ -169,9 +175,11 @@ Where:
 
 A synthesis is accepted when $Q(S) > Q_{\min}$ (default: 0.6).
 
-### 3.4 Procedualization Layer: Hybrid Scripts
+### 3.4 Procedualization Layer: Agent Skills
 
-Mature syntheses (those that have survived multiple contradiction cycles) are transformed into executable scripts. This is where Engram introduces "intelligence points."
+Mature syntheses (those that have survived multiple contradiction cycles) are transformed into Agent Skills—Claude's official format for modular, reusable capabilities. Each Skill contains a `SKILL.md` with instructions and optional bundled scripts.
+
+Engram extends this format with "hybrid scripts" that interleave deterministic code with targeted LLM reasoning, creating Skills that are both efficient and intelligent.
 
 ---
 
@@ -315,9 +323,20 @@ Let $S$ be a synthesis. The possible outputs are:
 | Type | Description | Artifact |
 |------|-------------|----------|
 | `rule` | Declarative guideline | `.claude/rules/engram/*.md` |
-| `skill` | Procedural workflow | `.claude/skills/{name}/` |
+| `skill` | Procedural workflow | `.claude/skills/{name}/SKILL.md` + scripts |
 | `rule_with_skill` | Both representations | Rule file linking to skill |
 | `none` | Insufficient confidence | No artifact |
+
+Skills follow Claude's official Agent Skills format:
+
+```
+.claude/skills/{name}/
+├── SKILL.md          # Instructions with YAML frontmatter
+└── scripts/
+    └── {name}.ts     # Hybrid script with intelligence points
+```
+
+The `SKILL.md` contains metadata (name, description for discovery) and instructions that Claude loads on-demand. Bundled scripts execute via bash without loading their code into context—only outputs consume tokens.
 
 ### 5.2 Content Characteristics
 
@@ -727,6 +746,7 @@ As AI agents become more prevalent in software development, systems like Engram 
 14. ProcMem (2025). Benchmarks for Procedural Memory Retrieval in Autonomous Agents. arXiv.
 15. HASHIRU (2025). Hierarchical Agents for Shared Human-AI Resource Utilization. arXiv.
 16. Hybrid Intelligence (2025). Frameworks for Joint Human-AI Decision Making. arXiv.
+17. Anthropic (2025). Agent Skills. https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview
 
 ---
 
