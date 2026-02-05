@@ -71,11 +71,7 @@ Neural program synthesis generates code from specifications. Engram differs in t
 
 Engram processes observations through four stages, inspired by memory consolidation in cognitive science:
 
-```
-Observation → Encoding → Consolidation → Procedualization
-     ↓            ↓            ↓               ↓
-  Tool Use    Embedding    Dialectic      Skill Script
-```
+![Memory Process](memory-process.png)
 
 ### 3.1 Observation Layer
 
@@ -300,23 +296,7 @@ In practice, this manifests as:
 
 Hybrid scripts occupy a unique point in the automation landscape:
 
-```
-Fully Deterministic ←——————————————————→ Fully Agentic
-     Scripts                                  LLM Agents
-        ↑                                         ↑
-   Predictable                              Flexible
-   Fast                                     Slow
-   Brittle                                  Robust
-   No judgment                              All judgment
-
-                    Hybrid Scripts
-                          ↓
-                   Best of both:
-                   - Fast for mechanical tasks
-                   - Intelligent for judgment calls
-                   - Predictable control flow
-                   - Flexible decision points
-```
+![Hybrid Scripts](scripts.png)
 
 ---
 
@@ -509,19 +489,7 @@ Where $N_{\text{cross}} = 3$. Cross-project patterns become user-level preferenc
 
 Engram creates a feedback loop where the agent improves itself and its knowledge persists:
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                                                         │
-│  Agent uses tools → Engram observes → Patterns form →  │
-│                                                         │
-│  Contradictions refine → Syntheses mature →            │
-│                                                         │
-│  Skills generate → Agent gets new tools →              │
-│                                                         │
-│  Agent uses new tools → Engram observes → ...          │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-```
+![Self-Improvement Loop](self-improvement.png)
 
 This is bounded self-improvement: the agent can only generate tools within its observation scope and the capabilities of the hybrid script format. It cannot modify its own weights or reasoning process—only its available tools.
 
