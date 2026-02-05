@@ -30,24 +30,35 @@ The result is an agent that literally writes its own tools, creating a self-impr
 
 ### 2.1 Agent Memory Systems
 
-Existing approaches to agent memory include:
+Existing approaches to agent memory include vector databases for embedding retrieval (MemGPT, LangChain Memory), episodic buffers with summarization, and pre-defined tool libraries. These systems accumulate information but don't transform it—a vector database returns similar past experiences; it doesn't synthesize them into new capabilities.
 
-- **Vector databases**: Store embeddings for retrieval (MemGPT, LangChain Memory)
-- **Episodic buffers**: Maintain conversation history with summarization
-- **Tool libraries**: Pre-defined functions the agent can call
+Recent work has advanced memory orchestration. **ENGRAM** [6] provides lightweight memory management for conversational agents, organizing data into episodic, semantic, and procedural types via a unified router/retriever. It emphasizes long-horizon consistency but lacks dialectical refinement or self-generated tools. **Mem0** [7] introduces memory primitives for agent evolution, including procedural knowledge management, but without contradiction-based synthesis or intelligence points. Wang et al. [8] propose long-term memory as a foundation for AI self-evolution, discussing continual adaptation that echoes our convergence properties—though without the dialectical mechanism.
 
-These systems accumulate information but don't transform it. A vector database returns similar past experiences; it doesn't synthesize them into new capabilities.
+Our work differs by transforming accumulated observations through dialectic into executable artifacts, not merely retrieving them.
 
-### 2.2 Learning from Demonstrations
+### 2.2 Dialectical Approaches in LLMs
 
-Behavioral cloning and imitation learning extract policies from expert demonstrations. However, these approaches typically require:
-- Explicit demonstration collection
-- Separate training phases
-- Model weight updates
+Chen et al. [9] propose a Hegelian dialectical approach for LLM self-reflection, using thesis-antithesis-synthesis to generate new ideas and correct errors in reasoning tasks. This mirrors our consolidation layer but focuses on general LLM reflection within a single reasoning chain rather than pattern detection across agent tool usage sessions. Their dialectic operates at inference time; ours operates across sessions to produce persistent artifacts.
 
-Engram operates continuously during normal use, requires no explicit demonstrations, and produces symbolic artifacts (scripts) rather than weight updates.
+### 2.3 Self-Improving Agents
 
-### 2.3 Program Synthesis
+Multiple works address self-evolving agents. **SAGE** [10] uses iterative feedback, reflection, and Ebbinghaus-based memory optimization for multi-task handling. **AgentEvolver** [11] enables autonomous evolution via self-questioning, navigation, and attribution for sample efficiency. A comprehensive survey on self-evolving agents [12] categorizes evolution across components (models, memory, tools) and stages, noting the need for hybrid neuro-symbolic approaches.
+
+These align with our self-improvement loop but do not incorporate dialectic for pattern consolidation. Engram's contribution is the specific mechanism—Hegelian synthesis—that refines patterns through contradiction rather than simple accumulation or reflection.
+
+### 2.4 Procedural Knowledge
+
+Work on procedural knowledge extraction from troubleshooting guides using VLMs [13] and benchmarks for procedural memory retrieval in agents [14] focus on identifying steps from observations, akin to our observation/encoding layers. However, they lack the full architecture connecting observation to self-generated tools.
+
+### 2.5 Hybrid Intelligence
+
+The term "hybrid intelligence" typically refers to human-AI collaboration—e.g., HASHIRU's hierarchical agents for resource utilization [15], or joint decision-making frameworks [16]. This differs from our "hybrid scripts" which combine deterministic code with LLM reasoning within a single executable. We are unaware of prior work on coding-specific hybrids that interleave programmatic control flow with targeted intelligence points.
+
+### 2.6 Learning from Demonstrations
+
+Behavioral cloning and imitation learning extract policies from expert demonstrations. However, these approaches typically require explicit demonstration collection, separate training phases, and model weight updates. Engram operates continuously during normal use, requires no explicit demonstrations, and produces symbolic artifacts (scripts) rather than weight updates.
+
+### 2.7 Program Synthesis
 
 Neural program synthesis generates code from specifications. Engram differs in that:
 - Input is observed behavior, not formal specifications
@@ -690,6 +701,17 @@ As AI agents become more prevalent in software development, systems like Engram 
 3. Anderson, J.R. (1982). Acquisition of cognitive skill. Psychological Review.
 4. Sumers, T.R., et al. (2023). Cognitive Architectures for Language Agents. arXiv.
 5. Park, J.S., et al. (2023). Generative Agents: Interactive Simulacra of Human Behavior. arXiv.
+6. ENGRAM (2025). Lightweight Memory Orchestration for Conversational Agents. arXiv.
+7. Mem0 (2025). Memory Primitives for Agent Evolution. arXiv.
+8. Wang, Z., et al. (2024). Long-Term Memory as a Foundation for AI Self-Evolution. arXiv.
+9. Chen, Y., et al. (2025). Dialectical Self-Reflection in Large Language Models: A Hegelian Approach. arXiv.
+10. SAGE (2024). Self-Evolving Agents with Iterative Feedback and Ebbinghaus Memory Optimization. arXiv.
+11. AgentEvolver (2025). Autonomous Agent Evolution via Self-Questioning and Navigation. arXiv.
+12. Zhang, L., et al. (2025). A Survey on Self-Evolving Agents: Components, Stages, and Hybrid Approaches. arXiv.
+13. Li, H., et al. (2026). Procedural Knowledge Extraction from Troubleshooting Guides using Vision-Language Models. arXiv.
+14. ProcMem (2025). Benchmarks for Procedural Memory Retrieval in Autonomous Agents. arXiv.
+15. HASHIRU (2025). Hierarchical Agents for Shared Human-AI Resource Utilization. arXiv.
+16. Hybrid Intelligence (2025). Frameworks for Joint Human-AI Decision Making. arXiv.
 
 ---
 
