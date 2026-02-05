@@ -76,6 +76,22 @@ const OutputTypeAnalysisSchema = z.object({
   isProcedural: z.boolean().describe('Does the content describe multi-step procedures?'),
 });
 
+const SemanticCharacteristicsSchema = z.object({
+  isImperative: z.boolean().describe(
+    'True if content describes MANDATORY behaviors that should ALWAYS or NEVER be done. ' +
+    'Look for semantic intent, not just keywords. Examples: "Tests must pass before merging", ' +
+    '"Never commit secrets", "Always validate input". False for suggestions, recommendations, or optional practices.'
+  ),
+  isProcedural: z.boolean().describe(
+    'True if content describes a MULTI-STEP WORKFLOW with distinct phases that must be followed in sequence. ' +
+    'Examples: "First gather data, then analyze, finally report", "Step 1: identify files, Step 2: read contents". ' +
+    'False for single actions, simple rules, or content that just mentions multiple things without a workflow.'
+  ),
+  confidence: z.number().min(0).max(1).describe('Confidence in this semantic analysis (0-1)'),
+});
+
+export type SemanticCharacteristics = z.infer<typeof SemanticCharacteristicsSchema>;
+
 // Export inferred types
 export type PatternAnalysis = z.infer<typeof PatternAnalysisSchema>;
 export type ContradictionAnalysis = z.infer<typeof ContradictionAnalysisSchema>;
@@ -401,6 +417,44 @@ IMPORTANT:
 - Each phrase should be short (3-7 words)`;
 
   const result = await queryWithSchema(prompt, TriggerPhrasesSchema);
+  return result;
+}
+
+/**
+ * Analyze semantic characteristics (isImperative, isProcedural) using LLM
+ * This provides more accurate detection than regex patterns by understanding intent
+ */
+export async function analyzeSemanticCharacteristics(
+  content: string
+): Promise<SemanticCharacteristics> {
+  const prompt = `Analyze this synthesis content and determine its semantic characteristics.
+
+<content>
+${content}
+</content>
+
+Determine:
+
+1. **isImperative**: Does this describe MANDATORY behaviors?
+   - TRUE: Content expresses rules that MUST be followed, things to ALWAYS or NEVER do
+   - TRUE: "Tests must pass", "Never commit secrets", "Always validate", "Ensure X before Y"
+   - FALSE: Suggestions, recommendations, optional practices, or descriptions of how something works
+   - FALSE: "You can use X", "Consider doing Y", "One approach is to..."
+
+   Focus on SEMANTIC INTENT, not keywords. "You should always consider..." is a suggestion (false).
+   "All commits must include tests" is a mandate (true).
+
+2. **isProcedural**: Does this describe a MULTI-STEP WORKFLOW?
+   - TRUE: Content describes a sequence of distinct steps that must be followed in order
+   - TRUE: "First do X, then Y, finally Z", "Step 1: ..., Step 2: ...", "The workflow is: gather → analyze → report"
+   - FALSE: Single actions, simple rules, or content that mentions multiple things without a sequential workflow
+   - FALSE: "When debugging, check logs and errors" (parallel, not sequential)
+
+   Focus on whether there's a clear ORDERED SEQUENCE of steps, not just multiple items.
+
+Provide your confidence in this analysis (0-1).`;
+
+  const result = await queryWithSchema(prompt, SemanticCharacteristicsSchema);
   return result;
 }
 

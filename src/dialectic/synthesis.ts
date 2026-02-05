@@ -18,7 +18,11 @@ import {
 } from '../db/queries/dialectic.ts';
 import { getPattern, updatePattern } from '../db/queries/patterns.ts';
 import { getMemory } from '../db/queries/memories.ts';
-import { analyzeSynthesis as llmAnalyzeSynthesis, analyzeOutputType as llmAnalyzeOutputType } from '../llm/index.ts';
+import {
+  analyzeSynthesis as llmAnalyzeSynthesis,
+  analyzeOutputType as llmAnalyzeOutputType,
+  analyzeSemanticCharacteristics,
+} from '../llm/index.ts';
 import { RulesWriter } from '../rules-writer/index.ts';
 import { getRulesConfig } from '../config.ts';
 import type {
@@ -69,8 +73,8 @@ export function extractToolDataFromMemories(memories: Memory[]): ToolDataSnapsho
   return toolData;
 }
 
-// Patterns for detecting imperative language
-const IMPERATIVE_PATTERNS = [
+// Fallback patterns for detecting imperative language (used when LLM unavailable)
+const FALLBACK_IMPERATIVE_PATTERNS = [
   /\balways\b/i,
   /\bnever\b/i,
   /\bmust\b/i,
@@ -84,8 +88,8 @@ const IMPERATIVE_PATTERNS = [
   /\bdon't\b/i,
 ];
 
-// Patterns for detecting procedural language
-const PROCEDURAL_PATTERNS = [
+// Fallback patterns for detecting procedural language (used when LLM unavailable)
+const FALLBACK_PROCEDURAL_PATTERNS = [
   /\bstep\s*\d/i,
   /\bfirst\b.*\bthen\b/i,
   /\bnext\b/i,
@@ -97,18 +101,19 @@ const PROCEDURAL_PATTERNS = [
 ];
 
 /**
- * Analyze characteristics of synthesis content for output type decision
+ * Analyze characteristics using heuristics only (fallback when LLM unavailable)
+ * Exported for testing purposes
  */
-function analyzeCharacteristics(
+export function analyzeCharacteristicsHeuristic(
   content: string,
   resolution: SynthesisResolution,
   toolData: ToolDataSnapshot[]
 ): OutputTypeAnalysis['characteristics'] {
-  // Check for imperative language
-  const isImperative = IMPERATIVE_PATTERNS.some(pattern => pattern.test(content));
+  // Check for imperative language using regex patterns
+  const isImperative = FALLBACK_IMPERATIVE_PATTERNS.some(pattern => pattern.test(content));
 
-  // Check for procedural language
-  const isProcedural = PROCEDURAL_PATTERNS.some(pattern => pattern.test(content));
+  // Check for procedural language using regex patterns
+  const isProcedural = FALLBACK_PROCEDURAL_PATTERNS.some(pattern => pattern.test(content));
 
   // Count distinct tools
   const distinctTools = new Set(toolData.map(t => t.tool));
@@ -138,19 +143,78 @@ function analyzeCharacteristics(
 }
 
 /**
- * Determine the output type for a synthesis using heuristics
- * Returns the decision with confidence score
+ * Analyze characteristics of synthesis content for output type decision
+ * Uses LLM for semantic analysis of isImperative/isProcedural with heuristic fallback
  */
-export function determineOutputType(
+async function analyzeCharacteristics(
+  content: string,
+  resolution: SynthesisResolution,
+  toolData: ToolDataSnapshot[]
+): Promise<OutputTypeAnalysis['characteristics']> {
+  // Get heuristic-based characteristics for measurable values
+  const heuristicResult = analyzeCharacteristicsHeuristic(content, resolution, toolData);
+
+  // Try LLM for semantic analysis of isImperative/isProcedural
+  try {
+    const semanticResult = await analyzeSemanticCharacteristics(content);
+
+    // Use LLM results for semantic characteristics, keep heuristics for measurable ones
+    return {
+      isImperative: semanticResult.isImperative,
+      isProcedural: semanticResult.isProcedural,
+      toolDiversity: heuristicResult.toolDiversity,
+      hasConditions: heuristicResult.hasConditions,
+      complexity: heuristicResult.complexity,
+    };
+  } catch (error) {
+    // Fall back to heuristics if LLM fails
+    console.error('[Synthesis] LLM semantic analysis failed, using heuristics:', error);
+    return heuristicResult;
+  }
+}
+
+/**
+ * Determine the output type for a synthesis using heuristics only (sync version)
+ * Exported for testing purposes - use determineOutputType for production code
+ */
+export function determineOutputTypeHeuristic(
   content: string,
   resolution: SynthesisResolution,
   toolData: ToolDataSnapshot[],
   exemplarCount: number,
   patternConfidence: number
 ): OutputTypeAnalysis {
-  const characteristics = analyzeCharacteristics(content, resolution, toolData);
+  const characteristics = analyzeCharacteristicsHeuristic(content, resolution, toolData);
+  return makeOutputTypeDecision(characteristics, resolution, exemplarCount, patternConfidence);
+}
 
-  // Decision logic based on the plan
+/**
+ * Determine the output type for a synthesis using heuristics with LLM semantic analysis
+ * Returns the decision with confidence score
+ */
+export async function determineOutputType(
+  content: string,
+  resolution: SynthesisResolution,
+  toolData: ToolDataSnapshot[],
+  exemplarCount: number,
+  patternConfidence: number
+): Promise<OutputTypeAnalysis> {
+  // Get LLM-enhanced characteristics (falls back to heuristics on error)
+  const characteristics = await analyzeCharacteristics(content, resolution, toolData);
+
+  // Use the same decision logic as heuristic version, but with LLM-enhanced characteristics
+  return makeOutputTypeDecision(characteristics, resolution, exemplarCount, patternConfidence);
+}
+
+/**
+ * Core decision logic shared between heuristic and LLM-enhanced versions
+ */
+function makeOutputTypeDecision(
+  characteristics: OutputTypeAnalysis['characteristics'],
+  resolution: SynthesisResolution,
+  exemplarCount: number,
+  patternConfidence: number
+): OutputTypeAnalysis {
   let outputType: SynthesisOutputType;
   let reasoning: string;
   let decisionConfidence: number;
@@ -222,6 +286,8 @@ export function determineOutputType(
 
 /**
  * Determine output type with optional LLM enhancement for uncertain cases
+ * Note: analyzeCharacteristics already uses LLM for semantic analysis,
+ * so this function only calls llmAnalyzeOutputType for low-confidence output type decisions
  */
 export async function determineOutputTypeWithLLM(
   content: string,
@@ -230,8 +296,8 @@ export async function determineOutputTypeWithLLM(
   exemplarCount: number,
   patternConfidence: number
 ): Promise<OutputTypeAnalysis> {
-  // First, get heuristic decision
-  const heuristicDecision = determineOutputType(
+  // Get decision (characteristics already use LLM for semantic analysis)
+  const decision = await determineOutputType(
     content,
     resolution,
     toolData,
@@ -239,12 +305,12 @@ export async function determineOutputTypeWithLLM(
     patternConfidence
   );
 
-  // If confidence is high enough, use heuristic decision
-  if (heuristicDecision.decisionConfidence >= 0.7) {
-    return heuristicDecision;
+  // If confidence is high enough, use the decision as-is
+  if (decision.decisionConfidence >= 0.7) {
+    return decision;
   }
 
-  // For uncertain cases, use LLM to refine the decision
+  // For uncertain output type decisions, use LLM to refine the output type choice
   try {
     const toolNames = toolData.map(t => t.tool);
     const llmAnalysis = await llmAnalyzeOutputType(
@@ -254,22 +320,18 @@ export async function determineOutputTypeWithLLM(
       exemplarCount
     );
 
-    // Combine LLM analysis with heuristic characteristics
+    // Use LLM's output type decision but keep our semantic characteristics
+    // (since analyzeCharacteristics already used LLM for those)
     return {
       outputType: llmAnalysis.outputType,
       reasoning: `LLM-enhanced: ${llmAnalysis.reasoning}`,
       decisionConfidence: llmAnalysis.decisionConfidence,
-      characteristics: {
-        ...heuristicDecision.characteristics,
-        // Override with LLM's assessment if it detected these
-        isImperative: llmAnalysis.isImperative,
-        isProcedural: llmAnalysis.isProcedural,
-      },
+      characteristics: decision.characteristics,
     };
   } catch (error) {
-    // Fall back to heuristic if LLM fails
-    console.error('[Synthesis] LLM output type analysis failed, using heuristics:', error);
-    return heuristicDecision;
+    // Fall back to our decision if LLM fails
+    console.error('[Synthesis] LLM output type analysis failed, using base decision:', error);
+    return decision;
   }
 }
 

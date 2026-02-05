@@ -416,11 +416,11 @@ describe('Rules Formatter', () => {
 });
 
 describe('Output Type Determination', () => {
-  // Import the determineOutputType function
-  const { determineOutputType } = require('./dialectic/synthesis.ts');
+  // Use the heuristic (sync) version for unit tests - it tests the same logic without LLM calls
+  const { determineOutputTypeHeuristic } = require('./dialectic/synthesis.ts');
 
   test('returns none for rejection resolution', () => {
-    const result = determineOutputType(
+    const result = determineOutputTypeHeuristic(
       'This pattern was rejected',
       { type: 'rejection' },
       [],
@@ -433,7 +433,7 @@ describe('Output Type Determination', () => {
   });
 
   test('returns none for low confidence', () => {
-    const result = determineOutputType(
+    const result = determineOutputTypeHeuristic(
       'Some pattern content',
       { type: 'integration' },
       [],
@@ -446,7 +446,7 @@ describe('Output Type Determination', () => {
   });
 
   test('returns none for insufficient exemplars', () => {
-    const result = determineOutputType(
+    const result = determineOutputTypeHeuristic(
       'Some pattern content',
       { type: 'integration' },
       [],
@@ -459,7 +459,7 @@ describe('Output Type Determination', () => {
   });
 
   test('returns rule for imperative-only content', () => {
-    const result = determineOutputType(
+    const result = determineOutputTypeHeuristic(
       'Always run tests before committing. Never commit secrets.',
       { type: 'integration' },
       [{ tool: 'Bash', action: 'bun test' }],
@@ -478,7 +478,7 @@ describe('Output Type Determination', () => {
       'If the analysis shows issues depending on the context, proceed to the next phase. ' +
       'This is a complex workflow that requires multiple tools and careful consideration. '.repeat(3);
 
-    const result = determineOutputType(
+    const result = determineOutputTypeHeuristic(
       longContent,
       { type: 'integration' },
       [
@@ -498,7 +498,7 @@ describe('Output Type Determination', () => {
   });
 
   test('returns rule_with_skill for imperative + procedural + multi-tool', () => {
-    const result = determineOutputType(
+    const result = determineOutputTypeHeuristic(
       'Always follow this debugging workflow before releasing. Step 1: First run the linter. Step 2: Then read the error logs. Finally run tests to verify.',
       { type: 'integration' },
       [
@@ -517,7 +517,7 @@ describe('Output Type Determination', () => {
   });
 
   test('returns rule_with_skill for conditional resolution with conditions', () => {
-    const result = determineOutputType(
+    const result = determineOutputTypeHeuristic(
       'When debugging memory issues, if the problem involves leaks then use profiler.',
       { type: 'conditional', conditions: ['memory issues', 'leaks'] },
       [{ tool: 'Bash' }, { tool: 'Read' }],
@@ -540,7 +540,7 @@ describe('Output Type Determination', () => {
     ];
 
     for (const text of imperativeTexts) {
-      const result = determineOutputType(
+      const result = determineOutputTypeHeuristic(
         text,
         { type: 'integration' },
         [],
@@ -562,7 +562,7 @@ describe('Output Type Determination', () => {
     ];
 
     for (const text of proceduralTexts) {
-      const result = determineOutputType(
+      const result = determineOutputTypeHeuristic(
         text,
         { type: 'integration' },
         [],
@@ -575,7 +575,7 @@ describe('Output Type Determination', () => {
 
   test('calculates complexity score correctly', () => {
     // Low complexity
-    const lowResult = determineOutputType(
+    const lowResult = determineOutputTypeHeuristic(
       'Short content',
       { type: 'integration' },
       [{ tool: 'Read' }],
@@ -585,7 +585,7 @@ describe('Output Type Determination', () => {
     expect(lowResult.characteristics.complexity).toBeLessThan(0.3);
 
     // High complexity
-    const highResult = determineOutputType(
+    const highResult = determineOutputTypeHeuristic(
       'A'.repeat(600) + ' if condition then do something depending on context',
       { type: 'conditional', conditions: ['a', 'b'] },
       [
