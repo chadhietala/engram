@@ -8,21 +8,25 @@ We present Engram, a memory architecture for AI coding agents that transforms ob
 
 ## 1. Introduction
 
-Current AI coding assistants operate primarily through in-context learning—each session starts fresh, with the model inferring user intent from conversation history. While effective, this approach has limitations:
+Modern AI coding assistants like Claude Code support persistent memory through hierarchical configuration files—project-level `CLAUDE.md`, modular `.claude/rules/`, and user preferences. This represents significant progress: teams can document coding standards, architectural patterns, and workflows that persist across sessions.
 
-1. **No persistent learning**: Insights from one session don't transfer to another
-2. **Redundant reasoning**: The model re-derives the same conclusions repeatedly
-3. **No skill accumulation**: Successful patterns aren't codified for reuse
+However, this memory is **manually authored**. Developers must recognize patterns in their own behavior, articulate them clearly, and maintain documentation as practices evolve. In practice, valuable patterns often go undocumented because:
 
-Human experts, by contrast, develop automaticity. A novice programmer consciously thinks through each git command; an expert executes complex workflows reflexively. This transition from deliberate reasoning (System 2) to automatic execution (System 1) is central to expertise development.
+1. **Recognition burden**: Identifying which workflows are worth codifying requires meta-cognitive effort
+2. **Articulation gap**: Translating implicit expertise into explicit instructions is difficult
+3. **Maintenance overhead**: Documentation drifts from actual practice without active curation
+4. **No procedural knowledge**: Memory files store instructions, not executable workflows
 
-Engram addresses this gap by:
+Human experts, by contrast, develop automaticity. A novice programmer consciously thinks through each git command; an expert executes complex workflows reflexively. This transition from deliberate reasoning (System 2) to automatic execution (System 1) is central to expertise development—and it happens through practice, not documentation.
+
+Engram bridges this gap by **learning from behavior rather than requiring documentation**:
 - Observing agent tool usage during normal operation
 - Detecting recurring patterns through semantic clustering
 - Refining patterns through dialectical contradiction
 - Generating executable hybrid scripts that encode mature patterns
+- Publishing mature knowledge to Claude Code's native memory system
 
-The result is an agent that literally writes its own tools, creating a self-improvement loop bounded only by the quality of its observations.
+The result is an agent that literally writes its own tools and documentation, creating a self-improvement loop bounded only by the quality of its observations.
 
 ---
 
@@ -420,15 +424,22 @@ This second-level analysis uses the semantic characteristics already determined 
 
 A key innovation is the graduation of mature patterns to Claude's native memory system, enabling persistence without the plugin.
 
-### 6.1 Claude's Memory Hierarchy
+### 6.1 Claude Code's Memory Hierarchy
 
-Claude Code loads context from:
+Claude Code implements a sophisticated memory system with multiple scopes, loaded in order of precedence:
 
-1. **CLAUDE.md** — Project-wide instructions
-2. **.claude/rules/*.md** — Path-triggered rules with YAML frontmatter
-3. **~/.claude/rules/*.md** — User-level rules
+| Scope | Location | Shared With |
+|-------|----------|-------------|
+| Managed policy | System-level `CLAUDE.md` | All users (IT-managed) |
+| Project memory | `./CLAUDE.md` or `./.claude/CLAUDE.md` | Team via source control |
+| Project rules | `./.claude/rules/*.md` | Team via source control |
+| User memory | `~/.claude/CLAUDE.md` | Just you (all projects) |
+| User rules | `~/.claude/rules/*.md` | Just you (all projects) |
+| Local memory | `./CLAUDE.local.md` | Just you (current project) |
 
-Engram publishes to `.claude/rules/engram/`, creating rules that load automatically.
+Project rules support path-specific activation via YAML frontmatter, allowing rules to apply only when Claude works with matching files.
+
+Engram publishes to `.claude/rules/engram/`, creating rules that load automatically and integrate seamlessly with manually-authored rules.
 
 ### 6.2 Publication Criteria
 
