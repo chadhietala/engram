@@ -361,11 +361,19 @@ When LLM analysis is unavailable, regex patterns provide fallback detection:
 
 $$\mathcal{I}_{\text{fallback}}(S) = \mathbb{1}[\exists w \in S : w \in W_{\text{imperative}}]$$
 
-Where $W_{\text{imperative}} = \{$`/always/i`, `/never/i`, `/must/i`, `/required?/i`, `/ensure/i`, `/before\s+\w+ing/i`$, \ldots\}$
+Where $W_{\text{imperative}}$ contains patterns like:
+
+```
+/always/i, /never/i, /must/i, /required?/i, /ensure/i, /before\s+\w+ing/i, ...
+```
 
 $$\mathcal{P}_{\text{fallback}}(S) = \mathbb{1}[\exists p \in S : p \text{ matches } R_{\text{procedural}}]$$
 
-Where $R_{\text{procedural}} = \{$`/step\s*\d/i`, `/first\b.*\bthen\b/i`, `/workflow/i`, `/\d+\.\s+\w/`$, \ldots\}$
+Where $R_{\text{procedural}}$ contains patterns like:
+
+```
+/step\s*\d/i, /first\b.*\bthen\b/i, /workflow/i, /\d+\.\s+\w/, ...
+```
 
 **Measurable Characteristics (Heuristic)**
 
