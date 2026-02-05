@@ -21,8 +21,7 @@ import { handleUserPromptSubmit } from './user-prompt-submit.ts';
 import { handlePostToolUse } from './post-tool-use.ts';
 import { handleStop } from './stop.ts';
 import { handleSessionEnd } from './session-end.ts';
-
-const DB_PATH = './data/engram.db';
+import { getDbPath } from '../config.ts';
 
 /**
  * Main hook dispatcher
@@ -31,7 +30,7 @@ export async function handleHook(input: HookInput): Promise<HookResult> {
   let db: Database;
 
   try {
-    db = initializeDatabase(DB_PATH);
+    db = initializeDatabase(getDbPath());
   } catch (error) {
     return {
       success: false,
