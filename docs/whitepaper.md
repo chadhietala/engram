@@ -337,19 +337,39 @@ Let $S$ be a synthesis. The possible outputs are:
 
 ### 5.2 Content Characteristics
 
-We extract characteristics $\chi(S)$ from synthesis content:
+We extract characteristics $\chi(S)$ from synthesis content using a hybrid approach: LLM semantic analysis for judgment-based characteristics, with heuristic fallback when the LLM is unavailable.
 
-**Imperative Score**
+**Semantic Characteristics (LLM-analyzed)**
 
-$$\mathcal{I}(S) = \frac{|\{w \in S : w \in W_{\text{imperative}}\}|}{|S|}$$
+For `isImperative` and `isProcedural`, we use LLM semantic analysis rather than regex pattern matching. This provides more accurate detection by understanding intent rather than matching keywords.
 
-Where $W_{\text{imperative}} = \{\text{"always", "never", "must", "ensure", "required", "do not"}, \ldots\}$
+$$\mathcal{I}(S) = \text{LLM}_{\text{semantic}}(S, \text{"mandatory behaviors"})$$
 
-**Procedural Score**
+The LLM evaluates whether content describes MANDATORY behaviors (rules that MUST be followed, things to ALWAYS or NEVER do) versus suggestions or recommendations. For example:
+- "All commits must include tests" → imperative (true)
+- "You should always consider..." → suggestion (false)
 
-$$\mathcal{P}(S) = \frac{|\{p \in S : p \text{ matches } R_{\text{procedural}}\}|}{|S|}$$
+$$\mathcal{P}(S) = \text{LLM}_{\text{semantic}}(S, \text{"multi-step workflow"})$$
 
-Where $R_{\text{procedural}} = \{$`/step\s*\d/`, `/first.*then/`, `/workflow/`, `/\d+\.\s+\w/`$, \ldots\}$
+The LLM evaluates whether content describes an ORDERED SEQUENCE of steps versus parallel actions or simple rules. For example:
+- "First do X, then Y, finally Z" → procedural (true)
+- "When debugging, check logs and errors" → parallel, not sequential (false)
+
+**Heuristic Fallback**
+
+When LLM analysis is unavailable, regex patterns provide fallback detection:
+
+$$\mathcal{I}_{\text{fallback}}(S) = \mathbb{1}[\exists w \in S : w \in W_{\text{imperative}}]$$
+
+Where $W_{\text{imperative}} = \{$`/always/i`, `/never/i`, `/must/i`, `/required?/i`, `/ensure/i`, `/before\s+\w+ing/i`$, \ldots\}$
+
+$$\mathcal{P}_{\text{fallback}}(S) = \mathbb{1}[\exists p \in S : p \text{ matches } R_{\text{procedural}}]$$
+
+Where $R_{\text{procedural}} = \{$`/step\s*\d/i`, `/first\b.*\bthen\b/i`, `/workflow/i`, `/\d+\.\s+\w/`$, \ldots\}$
+
+**Measurable Characteristics (Heuristic)**
+
+Tool diversity and complexity remain heuristic-based as they involve countable, measurable properties:
 
 **Tool Diversity**
 
@@ -386,17 +406,25 @@ Where:
 - $\tau_T = 2$ (tool diversity threshold)
 - $\kappa = 0.5$ (complexity threshold)
 
-### 5.4 LLM Refinement for Uncertain Cases
+### 5.4 Two-Level LLM Analysis
 
-When the decision confidence is low (< 0.7), the LLM provides additional analysis:
+The output type decision uses LLM analysis at two levels:
+
+**Level 1: Semantic Characteristic Analysis**
+
+As described in §5.2, $\mathcal{I}(S)$ and $\mathcal{P}(S)$ are determined by LLM semantic analysis that understands intent rather than matching keywords. This happens for every synthesis, with heuristic fallback on LLM failure.
+
+**Level 2: Output Type Refinement**
+
+When the output type decision confidence is low (< 0.7), a second LLM call refines the output type choice:
 
 $$\text{confidence}(\text{decision}) = \frac{\max(\text{margins})}{\sum \text{margins}}$$
 
 Where margins measure the distance from each decision boundary. For uncertain cases:
 
-$$\mathrm{output}(S) = \mathrm{LLM}(\mathrm{content}(S), \mathrm{resolution}(S), \mathrm{tools}(S))$$
+$$\mathrm{output}(S) = \mathrm{LLM}_{\text{output}}(\mathrm{content}(S), \mathrm{resolution}(S), \mathrm{tools}(S))$$
 
-The LLM returns structured analysis including imperative/procedural assessment and recommended output type.
+This second-level analysis uses the semantic characteristics already determined by Level 1, then provides structured analysis recommending the appropriate output type (`rule`, `skill`, `rule_with_skill`, or `none`).
 
 ---
 
@@ -684,7 +712,7 @@ The key contributions are:
 
 2. **Hybrid scripts**: A new execution model that places intelligence precisely where judgment is needed
 
-3. **Output type decision**: A formal system for determining whether patterns become rules, skills, or both based on content characteristics
+3. **Output type decision**: A formal system for determining whether patterns become rules, skills, or both, using LLM semantic analysis to understand content intent rather than keyword matching
 
 4. **Native memory integration**: Graduating mature patterns to the host system's memory, enabling persistence without the learning system active
 
