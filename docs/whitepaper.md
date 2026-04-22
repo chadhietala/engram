@@ -2,7 +2,7 @@
 
 **Abstract**
 
-We present Engram, a memory architecture for AI coding agents that transforms observed behavior patterns into reusable procedural knowledge through Hegelian dialectic. Unlike traditional approaches that accumulate examples or fine-tune models, Engram evolves understanding through contradiction and synthesis, producing Agent Skills in the open standard format adopted by Claude, Cursor, GitHub Copilot, VS Code, OpenAI Codex, and others. These skills contain "hybrid scripts" that interleave deterministic code with targeted LLM reasoning—placing intelligence precisely where judgment is needed. A novel output type decision system determines whether mature patterns become declarative rules, procedural skills, or both—publishing portable artifacts that work across the agent ecosystem. This creates a feedback loop where agents automatically generate tools that make them more effective, bridging the gap between System 2 (deliberate) and System 1 (automatic) cognition.
+We present Engram, a memory architecture for AI coding agents that transforms observed behavior patterns into reusable procedural knowledge through conflict-triggered refinement under a minimum-description-length (MDL) objective—cast narratively as Hegelian dialectic. Unlike traditional approaches that accumulate examples or fine-tune models, Engram evolves understanding through outcome-gated contradiction and synthesis, producing Agent Skills in the open standard format adopted by Claude, Cursor, GitHub Copilot, VS Code, OpenAI Codex, and others. These skills contain "hybrid scripts" that interleave deterministic code with targeted LLM reasoning—placing intelligence precisely where judgment is needed. A novel output type decision system determines whether mature patterns become declarative rules, procedural skills, or both; a curation layer retires skills that stop firing or succeeding; and a runtime selection loop uses top-K metadata retrieval with optional sandboxed rollouts to commit the best candidate. This creates a feedback loop where agents automatically generate tools that make them more effective, bridging the gap between System 2 (deliberate) and System 1 (automatic) cognition.
 
 ---
 
@@ -20,13 +20,13 @@ However, this memory is **manually authored**. Developers must recognize pattern
 Human experts, by contrast, develop automaticity. A novice programmer consciously thinks through each git command; an expert executes complex workflows reflexively. This transition from deliberate reasoning (System 2) to automatic execution (System 1) is central to expertise development—and it happens through practice, not documentation.
 
 Engram bridges this gap by **learning from behavior rather than requiring documentation**:
-- Observing agent tool usage during normal operation
+- Observing agent tool usage *and outcomes* during normal operation
 - Detecting recurring patterns through semantic clustering
-- Refining patterns through dialectical contradiction
+- Refining patterns through outcome-gated dialectical contradiction — behavior that merely *recurs* is not enough; it must also *succeed*
 - Generating executable hybrid scripts that encode mature patterns
-- Publishing mature knowledge to Claude Code's native memory system
+- Publishing mature knowledge to Claude Code's native memory system, and *retiring* skills that stop firing or succeeding
 
-The result is an agent that literally writes its own tools and documentation, creating a self-improvement loop bounded only by the quality of its observations.
+The result is an agent that literally writes its own tools and documentation, with a curation loop that keeps the library focused on what currently works — not a monotonically growing pile of every pattern ever observed.
 
 ---
 
@@ -48,28 +48,34 @@ Chen et al. [9] propose a Hegelian dialectical approach for LLM self-reflection,
 
 Multiple works address self-evolving agents. **SAGE** [10] uses iterative feedback, reflection, and Ebbinghaus-based memory optimization for multi-task handling. **AgentEvolver** [11] enables autonomous evolution via self-questioning, navigation, and attribution for sample efficiency. A comprehensive survey on self-evolving agents [12] categorizes evolution across components (models, memory, tools) and stages, noting the need for hybrid neuro-symbolic approaches.
 
-These align with our self-improvement loop but do not incorporate dialectic for pattern consolidation. Engram's contribution is the specific mechanism—Hegelian synthesis—that refines patterns through contradiction rather than simple accumulation or reflection.
+These align with our self-improvement loop but do not incorporate dialectic for pattern consolidation. Engram's contribution is the specific mechanism — conflict-triggered MDL refinement, narrated as Hegelian synthesis — that refines patterns through contradiction rather than simple accumulation or reflection.
 
-### 2.4 Procedural Knowledge
+The closest structural analogues to Engram's consolidation pipeline are **DreamCoder** [18] and **Voyager** [19]. DreamCoder alternates a waking phase (solving tasks) with a sleeping phase that refactors solutions into a reusable library and trains a neural recognizer to retrieve from it — the same wake/sleep shape we adopt, applied to lambda-calculus programs with an MDL-driven refactoring step rather than our outcome-gated dialectic. Voyager maintains a growing skill library of JavaScript functions synthesized from successful Minecraft trajectories, retrieved by embedding similarity, and is the closest prior system that produces *LLM-generated callable artifacts* from lived experience. Engram differs from both in three ways: (a) generated artifacts are emitted in the open Agent Skills format rather than a system-internal library, giving portability and human inspectability; (b) the consolidation loop is outcome-gated and employs a first-class curation/retirement mechanism, avoiding the unbounded library growth common to skill-accumulation systems; and (c) synthesized artifacts are *hybrid* — deterministic code with explicit intelligence points — rather than pure code or pure prompts.
+
+### 2.4 Amortized Reasoning and System 1 / System 2 Distillation
+
+The pattern of *slow deliberation producing artifacts that support fast retrieval* is central to Engram and has a direct analogue in **Expert Iteration** [20] and **AlphaZero** [21], where Monte Carlo Tree Search (System 2) produces supervision for a policy network (System 1) so subsequent decisions can be made with little or no search. Engram's consolidation-to-retrieval pipeline is the symbolic counterpart: offline synthesis produces Skills whose metadata supports cheap retrieval, and rollouts (§7.3) play the MCTS role at runtime when uncertainty demands it. The difference is the artifact — neural weights vs. inspectable code — and the learning signal — gradient descent on value estimates vs. outcome-gated dialectical refinement.
+
+### 2.5 Procedural Knowledge
 
 Work on procedural knowledge extraction from troubleshooting guides using VLMs [13] and benchmarks for procedural memory retrieval in agents [14] focus on identifying steps from observations, akin to our observation/encoding layers. However, they lack the full architecture connecting observation to self-generated tools.
 
-### 2.5 Hybrid Intelligence
+### 2.6 Hybrid Intelligence
 
 The term "hybrid intelligence" typically refers to human-AI collaboration—e.g., HASHIRU's hierarchical agents for resource utilization [15], or joint decision-making frameworks [16]. This differs from our "hybrid scripts" which combine deterministic code with LLM reasoning within a single executable. We are unaware of prior work on coding-specific hybrids that interleave programmatic control flow with targeted intelligence points.
 
-### 2.6 Learning from Demonstrations
+### 2.7 Learning from Demonstrations
 
 Behavioral cloning and imitation learning extract policies from expert demonstrations. However, these approaches typically require explicit demonstration collection, separate training phases, and model weight updates. Engram operates continuously during normal use, requires no explicit demonstrations, and produces symbolic artifacts (scripts) rather than weight updates.
 
-### 2.7 Program Synthesis
+### 2.8 Program Synthesis
 
 Neural program synthesis generates code from specifications. Engram differs in that:
 - Input is observed behavior, not formal specifications
 - Output combines generated code with LLM reasoning hooks
 - The system bootstraps itself from its own usage patterns
 
-### 2.8 Agent Skills Open Standard
+### 2.9 Agent Skills Open Standard
 
 Agent Skills [17] is an open standard originally developed by Anthropic and now adopted across the AI agent ecosystem—including Claude Code, Cursor, GitHub Copilot, VS Code, OpenAI Codex, Gemini CLI, Goose, and many others. Skills are directories containing `SKILL.md` (instructions with YAML frontmatter) and optional bundled scripts. Agents discover skills via metadata, load instructions on-demand when triggered, and execute scripts without loading their code into context.
 
@@ -87,7 +93,7 @@ Engram processes observations through four stages, inspired by memory consolidat
 
 ### 3.1 Observation Layer
 
-A hook system captures tool invocations during agent operation:
+A hook system captures tool invocations and their *outcomes* during agent operation:
 
 ```typescript
 interface ToolObservation {
@@ -96,10 +102,32 @@ interface ToolObservation {
   output: string;         // Tool result
   sessionId: string;      // Conversation context
   timestamp: number;
+
+  // Outcome signal — see §3.1.1
+  exitCode?: number;          // process / HTTP status where applicable
+  errorClass?: string;        // normalized error taxonomy (if any)
+  outcome: Outcome;           // success | failure | reverted | unknown
+  outcomeSource: OutcomeSrc;  // tool | test | user | judge | timeout
+  outcomeConfidence: number;  // [0,1], reflects source reliability
 }
+
+type Outcome    = "success" | "failure" | "reverted" | "unknown";
+type OutcomeSrc = "tool" | "test" | "user" | "judge" | "timeout";
 ```
 
 Observations include file reads, shell commands, code edits, and user prompts. This creates a complete record of agent behavior without modifying the agent itself.
+
+#### 3.1.1 Outcome Resolution
+
+Every observation is tagged with an outcome before it participates in consolidation. Outcomes are resolved by a cascade of sources in decreasing order of reliability:
+
+1. **Tool-intrinsic signals** — non-zero exit codes, HTTP 4xx/5xx, stderr matching known error classes, failed `Edit` patches, or exceptions from `intelligenceWithSchema` validation.
+2. **Test signals** — if a session triggers a test runner (`bun test`, `pytest`, etc.), pass/fail is propagated to the observations within the session window.
+3. **Revert signals** — if a subsequent edit reverses the effect of this observation within the same session, its outcome is demoted to `reverted`. This catches "looked fine, then had to be undone" cases.
+4. **User signals** — explicit acceptance (`/accept`), rejection, rollback via `git reset`, or session abandonment.
+5. **LLM-as-judge fallback** — for tasks without mechanical verification, a separate judge model scores the observation's contribution to task completion. Judge outputs receive reduced `outcomeConfidence` (default 0.5) to reflect known biases.
+
+Observations that cannot be resolved after the session closes remain `unknown` and are down-weighted in all downstream formulas. This is the central signal that distinguishes *recurrent* behavior from *effective* behavior — without it, Engram would faithfully codify bad habits.
 
 ### 3.2 Encoding Layer
 
@@ -110,30 +138,38 @@ The system identifies patterns through:
 2. **Semantic similarity**: Observations with similar embeddings
 3. **Structural patterns**: Recurring tool combinations (Read → Edit → Bash)
 
-### 3.3 Consolidation Layer: Hegelian Dialectic
+### 3.3 Consolidation Layer: Conflict-Triggered Refinement
 
-This is Engram's core innovation. Rather than simply accumulating patterns, the system evolves understanding through contradiction:
+**Mechanistic framing.** The consolidation layer implements *conflict-triggered refinement under a minimum-description-length (MDL) objective* (developed formally in §8.4). Coarse patterns are proposed, contradicted by observations they fail to cover, and replaced by conditional refinements that improve joint description length. The Hegelian thesis-antithesis-synthesis vocabulary is retained as an intuition pump — readers preferring a statistical-learning lens can treat it as *proposal → conflicting evidence → conditional refinement*. The mechanism is outcome-gated: only observations with resolved, non-`unknown` outcomes drive thesis promotion, and contradictions include outcome disagreement as a first-class signal.
 
 **Thesis Formation**
 
 A pattern $P$ with observations $\{o_1, o_2, \ldots, o_n\}$ forms a thesis $T$ when:
 
-$$|P| \geq N_{\min} \land C(P) \geq \gamma$$
+$$|P| \geq N_{\min} \land C(P) \geq \gamma \land \rho(P) \geq \rho_{\min}$$
 
 Where:
 - $N_{\min}$ = minimum observation count (default: 3)
 - $C(P)$ = cohesion score of the pattern
 - $\gamma$ = cohesion threshold (default: 0.7)
+- $\rho(P)$ = outcome-weighted success rate of the pattern
+- $\rho_{\min}$ = minimum success rate for promotion (default: 0.6)
 
 Cohesion is defined as the average pairwise similarity:
 
 $$C(P) = \frac{2}{n(n-1)} \sum_{i < j} \text{sim}(e_i, e_j)$$
 
-The thesis confidence is:
+The success rate is outcome- and confidence-weighted:
 
-$$\text{conf}(T) = \min\left(1, \frac{|P|}{N_{\text{saturate}}}\right) \cdot C(P)$$
+$$\rho(P) = \frac{\sum_{o \in P} w(o) \cdot \mathbb{1}[\text{outcome}(o) = \texttt{success}]}{\sum_{o \in P} w(o)}, \quad w(o) = \text{outcomeConfidence}(o) \cdot \kappa(o)$$
 
-Where $N_{\text{saturate}} = 10$ is the saturation point for evidence accumulation.
+Where $\kappa(o) \in \{1.0, 1.0, 0.3, 0.0\}$ for $\{\texttt{success}, \texttt{failure}, \texttt{reverted}, \texttt{unknown}\}$. Failures count toward the denominator but not the numerator; reverted outcomes partially count; unknown outcomes are ignored.
+
+The thesis confidence folds in outcome quality:
+
+$$\text{conf}(T) = \min\left(1, \frac{|P|_{\text{resolved}}}{N_{\text{saturate}}}\right) \cdot C(P) \cdot \rho(P)$$
+
+Where $|P|_{\text{resolved}}$ counts only observations with non-`unknown` outcomes and $N_{\text{saturate}} = 10$ is the saturation point for evidence accumulation. A pattern that is cohesive and recurrent but consistently unsuccessful ($\rho \to 0$) will never promote to a thesis — the intended behavior.
 
 **Antithesis Detection**
 
@@ -146,11 +182,17 @@ Where:
 - $D(o, T)$ = divergence score measuring behavioral difference
 - $\delta$ = contradiction threshold (0.3)
 
-Divergence is computed as:
+Divergence combines three orthogonal signals — structural, semantic, and outcome — because a shallow tool-sequence distance alone misses important contradiction modes (same tools used on different arguments; same tools producing different results):
 
-$$D(o, T) = 1 - \Pi(\mathrm{toolSeq}(o), \mathrm{expectedSeq}(T))$$
+$$D(o, T) = 1 - \left[\; \alpha_s \cdot \Pi(\mathrm{toolSeq}(o), \mathrm{expectedSeq}(T)) \;+\; \alpha_a \cdot \mathrm{sim}(\mathbf{e}_{\mathrm{args}}(o), \mathbf{e}_{\mathrm{args}}(T)) \;+\; \alpha_o \cdot \mathbb{1}[\mathrm{outcome}(o) = \mathrm{outcome}(T)] \;\right]$$
 
-Where $\Pi$ is the normalized Levenshtein similarity between tool sequences.
+Where:
+- $\Pi$ = normalized Levenshtein similarity between tool-name sequences (structural)
+- $\mathbf{e}_{\mathrm{args}}(\cdot)$ = embedding of concatenated tool arguments and salient outputs (semantic)
+- The indicator term compares the observation's outcome to $T$'s modal outcome (outcome)
+- $(\alpha_s, \alpha_a, \alpha_o) = (0.4, 0.3, 0.3)$
+
+The outcome term gives Engram a concrete notion of "same behavior, different result" — an observation whose tool sequence and arguments match $T$ but whose outcome differs is a first-class contradiction, even when structural/semantic similarity is high. This is what distinguishes refining a pattern from merely accumulating near-duplicates.
 
 **Synthesis Trigger**
 
@@ -305,6 +347,18 @@ In practice, this manifests as:
 | Commit message | 0.15 | 0.90 | Intelligence |
 | String concat | 0.99 | 0.01 | Deterministic |
 | Code review | 0.10 | 0.95 | Intelligence |
+
+#### 4.4.1 Placement in Practice
+
+The scores $D(t)$ and $I(t)$ above are analytical — they explain *why* a placement is correct, not *how* the skill generator arrives at it. In the implementation, a script-authoring LLM makes the placement call during generation. Three mechanisms keep that decision honest:
+
+1. **Meta-prompt with exemplars.** The generator's system prompt includes a tagged library of deterministic-vs-intelligence exemplars drawn from the table in §4.4, phrased as "use code for X because …; use `intelligence()` for Y because …". These are retrieved dynamically based on the current skill's domain so the generator sees the most relevant precedents.
+
+2. **Post-hoc placement verifier.** After a draft script is produced, a verifier LLM annotates each `intelligence()` call with an *escape analysis*: can this call be replaced by deterministic code (AST walk, regex, lookup) given the inputs in scope? Calls flagged as mechanically replaceable are rewritten; deterministic blocks flagged as genuinely context-dependent are converted to `intelligence()` calls. The verifier operates on the closure of the call site, not just the call signature.
+
+3. **Empirical recalibration.** Every `intelligence()` invocation is logged with its inputs, outputs, and the downstream outcome of the containing script. Calls whose outputs are trivially derivable from inputs (high mutual information, low entropy conditional on context) are candidates for demotion to deterministic code in the next version of the skill. Conversely, deterministic branches that produce frequent downstream failures are candidates for promotion to intelligence points.
+
+This turns §4.4's decision boundary from a one-shot classification into a closed loop: the library learns, from its own runtime traces, where it over- or under-uses intelligence.
 
 ### 4.5 Why This Matters
 
@@ -515,6 +569,37 @@ $$\text{scope}(R) = \texttt{user} \quad \text{if} \quad |\{\text{projects} : R \
 
 Where $N_{\text{cross}} = 3$. Cross-project patterns become user-level preferences.
 
+### 6.6 Curation and Retirement
+
+Promotion alone creates an ever-growing library, which degrades retrieval quality and encodes stale practice. Engram pairs every promotion with an *active curation* pass that runs during the same idle window as consolidation (§8.5). Curation has three levers: retirement, deduplication, and demotion.
+
+**Skill Fitness**
+
+For each published artifact $R$ we maintain a rolling fitness score over a sliding window of the last $W$ invocation opportunities:
+
+$$F(R) = \phi_r \cdot f_{\text{retrieve}}(R) + \phi_s \cdot f_{\text{select}}(R) + \phi_o \cdot f_{\text{outcome}}(R) - \phi_d \cdot f_{\text{duplicate}}(R)$$
+
+Where:
+- $f_{\text{retrieve}}(R)$ = fraction of relevant tasks in which $R$ appeared in the top-K retrieval set
+- $f_{\text{select}}(R)$ = fraction of retrievals in which $R$ was chosen for execution (given it was retrieved)
+- $f_{\text{outcome}}(R)$ = success rate of sessions in which $R$ was selected, weighted by `outcomeConfidence`
+- $f_{\text{duplicate}}(R)$ = maximum description-embedding cosine to any other skill in the library
+- $(\phi_r, \phi_s, \phi_o, \phi_d) = (0.2, 0.2, 0.5, 0.3)$; window $W = 50$ invocations
+
+**Retirement**
+
+When $F(R) < F_{\text{retire}}$ (default 0.2) *and* the window has accumulated at least $W_{\min} = 10$ invocation opportunities, $R$ is moved to `.claude/skills/engram/.archive/` rather than deleted. Archived skills are excluded from retrieval but retained for three reasons: (a) their observations remain valid training data; (b) if a retired skill's conditions reappear, it can be *reinstated* with a version bump rather than re-synthesized from scratch; (c) archived artifacts provide an audit trail for what the agent *used to do*.
+
+**Deduplication**
+
+When two skills $R_i$ and $R_j$ exceed duplication threshold $\tau_{\text{dup}} = 0.92$ on description embeddings *and* their exemplar sets overlap by more than 60%, Engram triggers a merge: the higher-fitness skill absorbs the other's exemplars, a new synthesis is attempted over the combined set, and the loser is archived. This prevents slow accretion of near-duplicate skills from repeated similar sessions.
+
+**Demotion**
+
+Skills whose `intelligence()` calls show persistently low marginal value (§4.4.1) are demoted — either rewritten with intelligence points replaced by deterministic code, or downgraded to rule-only artifacts if the procedural content was never needed. Conversely, rules whose surrounding observations show consistent conditional structure (different actions under different contexts) are promoted to `rule_with_skill`.
+
+Curation runs each idle cycle, bounded to $O(|\text{library}|)$ work per pass. The library size is empirically stable at 10-30 skills per active project after a few weeks of use — the combination of outcome-gated promotion (§3.3) and active retirement prevents unbounded growth.
+
 ---
 
 ## 7. The Self-Improvement Loop
@@ -525,41 +610,39 @@ Engram creates a feedback loop where the agent improves itself and its knowledge
 
 This is bounded self-improvement: the agent can only generate tools within its observation scope and the capabilities of the hybrid script format. It cannot modify its own weights or reasoning process—only its available tools.
 
-### 7.1 Formal Bounds on Self-Improvement
+### 7.1 Threat Model and Safety Architecture
 
-Let $K(t)$ represent the agent's capability at time $t$, measured as the set of tasks it can perform. The growth rate is bounded by:
+The relevant safety question for a self-improving agent is not *how fast does capability grow* but *what can a generated artifact do that the authoring agent could not*. For Engram the answer is: **nothing**, by construction — because every generated skill is executed by the same host agent under the same permission system. But that invariant is only useful if the path from synthesis to execution preserves inspectability and reversibility. This section specifies that path.
 
-$$\frac{dK}{dt} \leq O(t) \cdot E(t) \cdot G(t)$$
+**Threat Classes**
 
-Where:
-- $O(t)$ = observation rate (new patterns per unit time)
-- $E(t)$ = extraction efficiency (fraction of patterns that become skills)
-- $G(t)$ = generalization factor (reusability of generated skills)
+| Class | Description | Example |
+|-------|-------------|---------|
+| T1. Faulty synthesis | Skill encodes behavior that succeeded in observations but is incorrect in general | Pattern learned from a happy path that breaks on edge cases |
+| T2. Stale codification | Skill reflects workflow the user has since abandoned | Old deployment command that now fails silently |
+| T3. Data-poisoning | Observations from a compromised session bias synthesis toward harmful patterns | Attacker runs scripted sessions that teach `rm -rf` as a "cleanup" pattern |
+| T4. Prompt injection in content | Tool outputs contain adversarial text that influences `intelligence()` calls inside generated scripts | Fetched document instructs skill to exfiltrate secrets |
+| T5. Permission drift | A skill bundled into `.claude/skills/` runs with the host agent's current permissions, which may exceed those under which it was synthesized | Skill synthesized in read-only session later executes with write access |
 
-**Convergence Property**
+**Mitigations**
 
-As the agent's skill set grows, the marginal value of new observations decreases:
+1. **No new primitives.** Generated skills may only invoke tools already available to the host agent; they introduce no new capability surface. Formally, for any skill $R$, the set of host operations reachable from executing $R$ is a subset of the host's existing permission set $\mathcal{P}$. The agent's effective capability closure is $\mathcal{P}$, not a function of $R$.
 
-$$\lim_{t \to \infty} \frac{dK}{dt} = 0$$
+2. **Publication review gate.** Before a synthesis is written to `.claude/rules/engram/` or `.claude/skills/`, it is diffed and optionally presented to the user. A project-level `engram.config.json` controls the gate: `auto` (publish immediately), `review` (present diff, require approval), or `pr` (open a pull request). The default is `review` for skills with intelligence points and `auto` for rule-only artifacts.
 
-This occurs because:
-1. Common patterns are captured early (diminishing returns on $O(t)$)
-2. New observations increasingly match existing skills ($E(t)$ decreases)
-3. The space of useful skills for a domain is finite
+3. **Outcome gate (T1, T3).** §3.3's outcome-weighted confidence requires $\rho(P) \geq \rho_{\min}$ before thesis promotion. A pattern drawn from a compromised or unsuccessful session will not accumulate the success rate needed to publish. Observations from sessions marked as suspect (e.g., novel tool combinations, anomalous token counts) can be excluded from consolidation via a session-level trust flag.
 
-The system converges to a stable skill set $K^*$ representing comprehensive coverage of the user's workflow patterns.
+4. **Retirement and archive (T2).** The curation loop (§6.6) retires skills whose fitness falls below $F_{\text{retire}}$, catching stale codifications before they accumulate downstream failures.
 
-**Safety Bound**
+5. **Intelligence-point sandboxing (T4).** Every `intelligence()` call runs in a sub-context with a scoped system prompt that marks tool outputs as untrusted. Generated scripts that pass raw external content to `intelligence()` without marking it as untrusted fail the placement verifier (§4.4.1). Scripts that touch the filesystem or network based on `intelligence()` output require explicit confirmation via `decide()` with a safety-framed question.
 
-The agent's capabilities are strictly bounded by:
+6. **Permission invariance (T5).** Published skills carry a `permissions` manifest listing the tools they exercise, derived automatically from static analysis of the script. At execution time, the host refuses to run a skill whose declared permissions exceed the current session's grants. Upgrading a skill to broader permissions triggers a re-review.
 
-$$K(t) \subseteq \mathrm{Closure}(\mathcal{A} \cup \mathcal{L})$$
+7. **Reversible artifacts.** Skills and rules are files in the repository. Reversal is `git revert`. Archived skills (§6.6) are retained so reinstatement does not require re-synthesis.
 
-Where:
-- $\mathcal{A}$ = API tools (file I/O, shell execution, network requests)
-- $\mathcal{L}$ = LLM reasoning capabilities
+**What is *not* claimed.** Engram does not guarantee synthesized skills are correct, only that they are inspectable, revocable, and constrained to the host's existing permission surface. Errors of correctness are caught by the same mechanisms that catch human-authored rule errors: outcome signals, user rejection, and the curation loop.
 
-The agent cannot exceed this closure—it can only compose existing primitives in new ways.
+**Convergence (revisited).** The earlier version of this section claimed monotone convergence to a stable skill set. In practice the library reaches a *dynamic equilibrium* rather than a fixed point: promotions and retirements roughly balance once the user's workflow has been covered, but drift (new tools, new idioms, new project phases) keeps the library churning at a low rate. Empirically we observe 10-30 active skills per project after a few weeks, with ~1-2 skills entering and exiting archive per week of active use.
 
 ### 7.2 Emergence of Meta-Skills
 
@@ -570,6 +653,42 @@ In our testing, we observed the emergence of:
 - `evolve-skill-generation`: Improves the skill generation process itself
 
 This is recursive self-improvement within safe bounds.
+
+### 7.3 Runtime: Retrieval, Rollout, and Selection
+
+Consolidation (§3) produces a library; a separate runtime loop decides *which* skills fire and *whether* they are committed to the real environment. The runtime is structured as three stages, mirroring the Kahneman System-1 / System-2 split.
+
+**Stage 1 — Retrieval (System 1, cheap).**
+
+On each task, the host agent matches the task description and recent observation window against skill metadata:
+
+$$\text{topK}(q) = \underset{R \in \mathcal{L}}{\mathrm{argtop\text{-}K}} \; \left[\lambda_e \cdot \mathrm{sim}(\mathbf{e}_q, \mathbf{e}_{R.\mathrm{desc}}) + \lambda_p \cdot \mathbb{1}[\mathrm{paths}(R) \cap \mathrm{paths}(q) \neq \emptyset] + \lambda_f \cdot F(R) \right]$$
+
+Where $F(R)$ is the skill fitness from §6.6 and $(\lambda_e, \lambda_p, \lambda_f) = (0.6, 0.2, 0.2)$. Retrieval uses only the `SKILL.md` frontmatter and description — the body is not loaded. This preserves Agent Skills' progressive-disclosure property: retrieval cost scales with the library, not with skill size. Typical $K = 8$.
+
+**Stage 2 — Rollout (optional, parallel, bounded).**
+
+When the top-K contains multiple candidates within a confidence margin, or the task is flagged high-stakes, Engram forks the environment and runs each candidate in parallel. Modern sandbox runtimes (Firecracker-class microVMs, container-backed sandboxes) achieve sub-100 ms cold starts, making top-K rollout tractable within interactive latency budgets:
+
+$$\tilde{o}_i = \mathrm{execute}(R_i, \mathrm{fork}(\mathrm{env}))$$
+
+Each fork inherits the task state but commits nowhere. Rollouts are scored by a verifier:
+
+$$\mathrm{score}(\tilde{o}_i) = \mathcal{V}(\tilde{o}_i, \mathrm{task})$$
+
+$\mathcal{V}$ is a composition of (a) mechanical checks where available (tests pass, types check, no errors), (b) `intelligenceWithSchema` judging for subjective tasks, and (c) the candidate's own declared success predicate (a skill can advertise what "done" looks like in its metadata). When no signal is available, rollout is skipped and the top-1 retrieval is executed directly.
+
+**Stage 3 — Commit and Update.**
+
+The highest-scoring rollout is replayed against the true environment. Its outcome — the *committed* outcome, not the fork outcome — feeds back into $F(R)$ for the selected skill and into a softer update for unselected candidates:
+
+- **Winner:** $F(R^\star) \leftarrow F(R^\star) + \eta \cdot (\mathrm{score} - \bar{F})$
+- **Near-winners:** candidates within the confidence margin of $R^\star$ receive a dampened update scaled by their rollout score, to avoid starving genuinely useful alternates.
+- **Near-duplicates:** candidates with high description-embedding overlap with $R^\star$ are *decayed* — not because they were wrong, but because they are redundant and compete for retrieval slots. This is the diversity-preservation mechanism noted in §6.6.
+
+Where rollout is not feasible (side-effectful actions on external systems, long-horizon tasks, irreversible operations), the runtime degenerates to Stage 1 + 3: top-1 retrieval, direct execution, outcome update. The library can still improve, but without the multi-arm advantage.
+
+**Relation to classical methods.** This is a three-level hierarchy: retrieval is contextual-bandit arm selection over skill metadata (amortized from offline consolidation); rollout is bounded Monte Carlo simulation over a cheap model of the environment; commit-and-update is a standard bandit update with diversity-preserving decay. What's distinctive is the stack: the slow consolidation loop produces structured arms (skills) whose descriptions are themselves the retrieval features, which makes contextual retrieval tractable in a way that raw tool-level RL is not.
 
 ---
 
@@ -595,9 +714,21 @@ Where:
 - $S_0$ = initial strength at encoding (typically 1.0)
 - $\lambda$ = decay constant (we use $\lambda = 0.1$ per day)
 - $t_0$ = timestamp of memory creation
-- $A(m)$ = access count (number of retrievals)
-- $V(m)$ = validation score (contribution to successful syntheses)
+- $A(m)$ = access count (number of retrievals) — a usage signal
+- $V(m)$ = validation score — an *outcome* signal
 - $\alpha, \beta$ = weighting coefficients ($\alpha = 0.2$, $\beta = 0.5$)
+
+The validation score combines three components and is bounded to $[0, 1]$:
+
+$$V(m) = \beta_o \cdot v_{\text{outcome}}(m) + \beta_s \cdot v_{\text{synthesis}}(m) + \beta_r \cdot v_{\text{runtime}}(m)$$
+
+Where:
+- $v_{\text{outcome}}(m)$ = the observation's own resolved outcome, weighted by `outcomeConfidence` (§3.1.1)
+- $v_{\text{synthesis}}(m)$ = contribution to a successful synthesis (survived antithesis, promoted)
+- $v_{\text{runtime}}(m)$ = downstream outcomes of skills whose exemplars include $m$ (§7.3 feedback)
+- $(\beta_o, \beta_s, \beta_r) = (0.5, 0.3, 0.2)$
+
+Decoupling usage from validation matters: a memory may be retrieved often but consistently mislead the agent. Under the old formulation ($V$ = "contribution to syntheses") such a memory would gain strength simply from being reused. The revised $V$ down-weights memories whose downstream outcomes are poor, regardless of retrieval frequency.
 
 A memory is pruned when $S(m, t) < \theta$ (threshold = 0.1).
 
@@ -655,6 +786,20 @@ Like human sleep, Engram consolidates memories during idle periods:
 
 This background processing means the system improves even when not actively used.
 
+### 8.6 Parameter Calibration
+
+The formulas above contain a number of free scalars — thresholds ($\gamma = 0.7$, $\delta = 0.3$, $\tau = 0.75$, $\rho_{\min} = 0.6$, $F_{\text{retire}} = 0.2$, $\tau_{\text{dup}} = 0.92$), counts ($N_{\min}$, $N_{\text{saturate}}$, $W$, $K$), and weighting coefficients in the divergence, fitness, validation, and retrieval equations. The defaults listed are those we observed to work on a TypeScript coding corpus over several weeks of use; they are not claimed optimal.
+
+Three classes of parameter behave differently and warrant different calibration strategies:
+
+1. **Decision thresholds** ($\gamma$, $\delta$, $\rho_{\min}$, $F_{\text{retire}}$, $\tau_{\text{dup}}$) directly gate publication and retirement. These are most sensitive to corpus properties and should be learned per-project from a small calibration set of human-labeled (promote | retire) decisions. We expose them as project-level configuration; defaults are conservative (biased toward fewer, higher-confidence publications).
+
+2. **Mixing weights** ($(\alpha_s, \alpha_a, \alpha_o)$ for divergence, $(\phi_r, \phi_s, \phi_o, \phi_d)$ for fitness, $(\beta_o, \beta_s, \beta_r)$ for validation, $(\lambda_e, \lambda_p, \lambda_f)$ for retrieval) combine signals of different units into a scalar. These are less sensitive to corpus choice but can be refined via gradient-free search (CMA-ES over a held-out evaluation task set) once sufficient data accumulates.
+
+3. **Shape parameters** ($\lambda = 0.1/\text{day}$ decay, saturation points, margins) govern dynamics rather than decisions. These are inherited from cognitive-science analogues (Ebbinghaus, spacing effect) and have less reason to require per-project tuning.
+
+For the current release we expose (1) as configuration, provide tooling to run (2) when sufficient labeled outcomes exist, and treat (3) as fixed.
+
 ---
 
 ## 9. Evaluation
@@ -684,9 +829,13 @@ This nuanced understanding would not emerge from simple pattern accumulation.
 
 ### 9.3 Limitations
 
-- **Cold start**: Requires sufficient observations before useful patterns emerge
-- **Domain specificity**: Patterns learned in one codebase may not transfer
-- **LLM dependency**: Intelligence points require API access at runtime
+- **Cold start.** Requires sufficient observations before useful patterns emerge; the outcome-gated thesis promotion (§3.3) extends cold-start duration relative to pure accumulation, trading time-to-first-skill for skill quality.
+- **Domain specificity.** Patterns learned in one codebase may not transfer. Cross-project promotion (§6.5) partially addresses this but relies on multiple projects contributing similar patterns.
+- **LLM dependency.** Intelligence points require model access at runtime, and the consolidation layer itself uses LLM calls for semantic characteristics (§5.2) and output-type refinement (§5.4). Degraded-mode heuristics are provided but produce coarser artifacts.
+- **Outcome signal noise.** The pipeline is only as good as its outcome resolver. Mechanical signals (exit codes, tests) are reliable; LLM-as-judge outcomes (§3.1.1) inherit known judge biases and sycophancy. When a project has few mechanical signals available, consolidation quality degrades in a way that is hard to detect without ground-truth evaluation.
+- **Fork fidelity.** Runtime rollouts (§7.3) assume the forked environment matches the true environment closely enough that rollout scores predict committed outcomes. This holds well for local code operations but breaks for skills that touch external stateful systems (production databases, rate-limited APIs, services with persistent side effects). The runtime degrades to top-1 execution in these cases, forfeiting the multi-arm advantage.
+- **Parameter sensitivity.** Several thresholds (§8.6) are empirically set on a single corpus. Deployments in new domains should run the calibration protocol before trusting default values, particularly $\rho_{\min}$, $F_{\text{retire}}$, and $\tau_{\text{dup}}$.
+- **Curation latency.** Retirement requires $W_{\min}$ invocation opportunities to trigger, which can be weeks for infrequently-used skills. Bad skills may therefore persist longer than desirable in low-traffic areas of the library.
 
 ---
 
@@ -712,21 +861,25 @@ Skills that compose other skills, enabling complex workflows from simple primiti
 
 ## 11. Conclusion
 
-Engram demonstrates that AI agents can systematically convert experiential knowledge into procedural tools through dialectical refinement. The hybrid script architecture—combining deterministic code with targeted LLM reasoning—offers a practical middle ground between brittle automation and expensive full-agent reasoning.
+Engram demonstrates that AI agents can systematically convert experiential knowledge into procedural tools through *outcome-gated conflict-triggered refinement*, narrated as Hegelian dialectic and grounded in a minimum-description-length objective. The hybrid script architecture—combining deterministic code with targeted LLM reasoning—offers a practical middle ground between brittle automation and expensive full-agent reasoning.
 
 The key contributions are:
 
-1. **Dialectical memory**: Using thesis-antithesis-synthesis to evolve understanding rather than accumulate examples
+1. **Outcome-gated dialectical memory.** Thesis promotion, antithesis detection, and synthesis quality are all conditioned on resolved outcome signals (§3.1.1, §3.3), so the system refines patterns based on what *worked*, not merely what *recurred*. The Hegelian vocabulary is a scaffold over an MDL-style refinement objective (§8.4).
 
-2. **Hybrid scripts**: A new execution model that places intelligence precisely where judgment is needed
+2. **Hybrid scripts with closed-loop placement.** A new execution model that places intelligence where judgment is needed, with an explicit empirical recalibration loop (§4.4.1) that demotes unneeded intelligence points and promotes deterministic branches that fail in practice.
 
-3. **Output type decision**: A formal system for determining whether patterns become rules, skills, or both, using LLM semantic analysis to understand content intent rather than keyword matching
+3. **Output-type decision.** A formal system for determining whether patterns become rules, skills, or both, using LLM semantic analysis rather than keyword matching.
 
-4. **Open standard compatibility**: Generating Agent Skills in the open format adopted across the ecosystem (Claude, Cursor, GitHub Copilot, VS Code, OpenAI Codex, etc.), enabling portability without vendor lock-in
+4. **Curation and retirement.** A first-class fitness, deduplication, and archival mechanism (§6.6) that prevents unbounded library growth and catches stale codifications — the missing half of most skill-accumulation systems.
 
-5. **Bounded self-improvement**: Agents that generate their own tools within safe, observable limits
+5. **Runtime selection loop.** Top-K metadata retrieval, optional sandboxed parallel rollouts, and bandit-style updates with diversity decay (§7.3) — the System-1 counterpart to the consolidation System-2.
 
-As AI agents become more prevalent in software development, systems like Engram offer a path toward agents that genuinely learn from experience—not through weight updates or prompt engineering, but through the autonomous generation of new capabilities. The adoption of Agent Skills as an open standard means these learned capabilities can flow across the entire agent ecosystem.
+6. **Open standard compatibility.** Generating Agent Skills in the open format adopted across the ecosystem, enabling portability without vendor lock-in.
+
+7. **Concrete safety architecture.** A threat-model-driven safety story (§7.1) — permission invariance, publication review gates, outcome-gated promotion, intelligence-point sandboxing — replacing aspirational convergence claims with enforceable mechanisms.
+
+As AI agents become more prevalent in software development, systems like Engram offer a path toward agents that genuinely learn from experience—not through weight updates or prompt engineering, but through the autonomous generation, curation, and selection of callable capabilities. The adoption of Agent Skills as an open standard means these learned capabilities can flow across the entire agent ecosystem.
 
 ---
 
@@ -749,6 +902,10 @@ As AI agents become more prevalent in software development, systems like Engram 
 15. HASHIRU (2025). Hierarchical Agents for Shared Human-AI Resource Utilization. arXiv.
 16. Hybrid Intelligence (2025). Frameworks for Joint Human-AI Decision Making. arXiv.
 17. Agent Skills Open Standard (2025). https://agentskills.io
+18. Ellis, K., et al. (2021). DreamCoder: Bootstrapping Inductive Program Synthesis with Wake-Sleep Library Learning. PLDI.
+19. Wang, G., et al. (2023). Voyager: An Open-Ended Embodied Agent with Large Language Models. arXiv.
+20. Anthony, T., Tian, Z., Barber, D. (2017). Thinking Fast and Slow with Deep Learning and Tree Search. NeurIPS.
+21. Silver, D., et al. (2018). A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play. Science.
 
 ---
 
